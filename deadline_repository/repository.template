@@ -1,0 +1,343 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Provides configuration for a DeadLine Database and Repository instance. (uksb-1pejj2dtk)
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Region Configuration
+        Parameters:
+          - pAvailabilityZones
+
+      - Label:
+          default: Network (existing Management VPC config)
+        Parameters:
+          - pManagementVPC
+          - pMgmtAppPrivateSubnetA
+          - pMgmtAppPrivateSubnetB
+
+      - Label:
+          default: Render Scheduler Configuration
+        Parameters:
+          - pDeadLineRepoInstanceType
+          - pDeadLineRepoAmi
+          - pDeadLineRepoMinCapacity
+          - pDeadLineRepoDesiredCapacity
+          - pDeadLineRepoMaxCapacity
+
+Parameters:
+  pAvailabilityZones:
+    Description: The list of Availability Zones to use for the subnets in the VPC.
+      This template uses two Availability Zones from your list and preserves the logical order you specify.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+
+  pManagementVPC:
+    Description: Management VPC
+    Type: AWS::EC2::VPC::Id
+
+  pMgmtAppPrivateSubnetA:
+    Description: Render Scheduler Subnet A
+    Type: AWS::EC2::Subnet::Id
+
+  pMgmtAppPrivateSubnetB:
+    Description: Render Scheduler Subnet B
+    Type: AWS::EC2::Subnet::Id
+
+  pDeadLineRepoInstanceType:
+    Description: Instance type for the Render Scheduler
+    Type: String
+
+  pDeadLineRepoAmi:
+    Description: Which Render Scheduler AMI do you want to use?
+    Type: AWS::EC2::Image::Id
+
+  pDeadLineRepoMinCapacity:
+    Description: The minimum number of instances that can run in your auto scale group
+    Type: String
+
+  pDeadLineRepoDesiredCapacity:
+    Description: The desired capacity must be less than or equal to the maximum capacity
+    Type: String
+
+  pDeadLineRepoMaxCapacity:
+    Description: The maximum number of instances that you can run in your auto scale group
+    Type: String
+
+  pDeadlineArtifacts:
+    Description: S3 bucket name with DeadLine Artifacts
+    Type: String
+
+  pDeadlineRepositorySambaPassword:
+    Description: Password for Samba
+    Type: String
+    NoEcho: true
+
+  pRenderFarmSecurityGroup:
+    Description: Render Farm Security Group ID
+    Type: AWS::EC2::SecurityGroup::Id
+
+  pEnvironment:
+    AllowedValues:
+      - DEV
+      - TEST
+      - PROD
+    Default: DEV
+    Description: Environment (Dev, Test or Prod)
+    Type: String
+
+Resources:
+  rDeadLineRepoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Render Scheduler Instances
+      VpcId: !Ref pManagementVPC
+      Tags:
+        - Key: Name
+          Value: deadline-repo-sg
+        - Key: Environment
+          Value: !Ref pEnvironment
+
+  rRenderFarmToDeadLineRepoIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref rDeadLineRepoSecurityGroup
+      Description: render-farm-sg
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref pRenderFarmSecurityGroup
+
+  rDeadLineRepoInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  rDeadLineRepoInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref rDeadLineRepoInstanceRole
+
+  rDeadLineRepoLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 90
+
+  rDeadLineRepoLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              jq: []
+              awslogs: []
+              samba: []
+          files:
+            /etc/awslogs/awslogs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/lib/awslogs/agent-state
+
+                [/var/log/messages]
+                file = /var/log/messages
+                log_group_name = ${rDeadLineRepoLogGroup}
+                log_stream_name = %INSTANCE_ID/var/log/messages
+                datetime_format = %b %d %H:%M:%S
+                initial_position = start_of_file
+            /tmp/awslog_init.sh:
+              content: !Sub |
+                #!/bin/bash -xe
+                INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
+                sed -i "s|%INSTANCE_ID|$INSTANCE_ID|g" /etc/awslogs/awslogs.conf
+                sed -i -e "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
+                systemctl enable awslogsd.service
+                systemctl start awslogsd.service
+              mode: '755'
+            /etc/samba/smb.conf:
+              content: |
+                [global]
+                        workgroup = SAMBA
+                        security = user
+
+                        passdb backend = tdbsam
+
+                        printing = cups
+                        printcap name = cups
+                        load printers = yes
+                        cups options = raw
+
+                [homes]
+                        comment = Home Directories
+                        valid users = %S, %D%w%S
+                        browseable = No
+                        read only = No
+                        inherit acls = Yes
+
+                [printers]
+                        comment = All Printers
+                        path = /var/tmp
+                        printable = Yes
+                        create mask = 0600
+                        browseable = No
+
+                [print$]
+                        comment = Printer Drivers
+                        path = /var/lib/samba/drivers
+                        write list = @printadmin root
+                        force group = @printadmin
+                        create mask = 0664
+                        directory mask = 0775
+
+                [DeadlineRepository]
+                        path = /data/Thinkbox/DeadlineRepository10
+                        writeable = Yes
+                        guest ok = No
+                        create mask = 0700
+                        force create mode = 0700
+                        force directory mode = 0700
+                        unix extensions = No
+              mode: '755'
+          commands:
+            01_check_data:
+              command: !Sub |
+                #!/bin/bash -xe
+                EC2_INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
+
+                # Volume /dev/sdh (which will get created as /dev/xvdh on Amazon Linux)
+                DATA_STATE="unknown"
+                until [ "${!DATA_STATE}" == "attached" ]; do
+                  DATA_STATE=$(aws ec2 describe-volumes \
+                    --region ${AWS::Region} \
+                    --filters \
+                      Name=attachment.instance-id,Values=${!EC2_INSTANCE_ID} \
+                      Name=attachment.device,Values=/dev/sdh \
+                    --query Volumes[].Attachments[].State \
+                    --output text)
+                  sleep 5
+                done
+            02_mkfs:
+              command: |
+                #!/bin/bash -xe
+                # Format /dev/xvdh if it does not contain a partition yet
+                if [ "$(file -b -s /dev/xvdh)" == "data" ];
+                  then mkfs -t ext4 /dev/xvdh
+                fi
+            03_mkdir:
+              command: mkdir -p /data/Thinkbox
+            04_mount:
+              command: mount /dev/xvdh /data
+            05_fstab:
+              command: echo '/dev/xvdh /data ext4 defaults,nofail 0 2' >> /etc/fstab
+            06_awslogs:
+              command: /tmp/awslog_init.sh
+            07_mkdir:
+              command: mkdir -p /data/downloads
+            08_copy_deadline_files_from_s3:
+              command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
+            09_mkdir:
+              command: mkdir -p /data/install
+            10_untar:
+              command: ls /data/downloads | grep Deadline | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+            11_install:
+              command: ls /data/install | grep DeadlineRepository |
+                (read repo; /data/install/$repo --mode unattended --installmongodb true
+                --prefix "/data/Thinkbox/DeadlineRepository10"
+                --mongodir "/data/Thinkbox/DeadlineDatabase10")
+            12_user:
+              command: useradd deadlineuser
+            13_repo_owner:
+              command: chown -R deadlineuser:nobody /data/Thinkbox/DeadlineRepository10
+            14_repo_permissions:
+              command: chmod -R 500 /data/Thinkbox/DeadlineRepository10
+            15_repo_full_permissions:
+              command: cd /data/Thinkbox/DeadlineRepository10 && chmod -R 700 jobs/ jobsArchived/ reports/
+            16_samba_user:
+              command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a deadlineuser
+            17_samba_service:
+              command: systemctl enable smb.service && systemctl restart smb.service
+
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: !Ref pDeadLineRepoAmi
+      IamInstanceProfile: !Ref rDeadLineRepoInstanceProfile
+      InstanceType: !Ref pDeadLineRepoInstanceType
+      BlockDeviceMappings:
+        - DeviceName: /dev/sdh
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp2
+            Encrypted: true
+      SecurityGroups:
+        - !Ref rDeadLineRepoSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update --security -y
+          yum update aws-cfn-bootstrap -y
+
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadLineRepoLaunchConfiguration --region ${AWS::Region}
+          # Signal the status from cfn-init
+          /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadLineRepoAutoScalingGroup --region ${AWS::Region}
+
+  rDeadLineRepoAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - !Select [0, !Ref pAvailabilityZones]
+        - !Select [1, !Ref pAvailabilityZones]
+      VPCZoneIdentifier:
+        - !Ref pMgmtAppPrivateSubnetA
+        - !Ref pMgmtAppPrivateSubnetB
+      LaunchConfigurationName: !Ref rDeadLineRepoLaunchConfiguration
+      MinSize: !Ref pDeadLineRepoMinCapacity
+      DesiredCapacity: !Ref pDeadLineRepoDesiredCapacity
+      MaxSize: !Ref pDeadLineRepoMaxCapacity
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 0
+      Tags:
+        - Key: Name
+          Value: vfx-deadline-repository
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref pEnvironment
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: 'PT5M'
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        PauseTime: 'PT2M'
+        WaitOnResourceSignals: true
+      AutoScalingReplacingUpdate:
+        WillReplace: true
+
+Outputs:
+  rDeadLineRepoSecurityGroup:
+    Value: !Ref rDeadLineRepoSecurityGroup
+    Export:
+      Name: eDeadLineRepoSecurityGroup
+
+  rDeadLineRepoLaunchConfiguration:
+    Value: !Ref rDeadLineRepoLaunchConfiguration
+
+  rDeadLineRepoAutoScalingGroup:
+    Value: !Ref rDeadLineRepoAutoScalingGroup
+
+  rDeadLineRepoInstanceRole:
+    Value: !Ref rDeadLineRepoInstanceRole
