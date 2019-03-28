@@ -11,6 +11,8 @@ This is extension only and will not work without [quickstart-vfx-ise](https://gi
 
 - Make sure to deploy both Cloud Formation templates in a same AWS Region.
 
+- Uploded Deadline installer (Deadline-XX.X.XX.X-linux-installers.tar to S3 bucket.
+
 - If deploying via AWS CLI: modify repository-parameters.json with values from quickstart-vfx-ise CloudFormation Outputs tab.
 
 - If deploying from AWS console: provide values from quickstart-vfx-ise CloudFormation Outputs tab.
