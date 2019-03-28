@@ -34,3 +34,18 @@ This is extension only and will not work without [quickstart-vfx-ise](https://gi
 > for example, if your quickstart-vfx-ise stack is deployed in Dublin region
 
 `aws cloudformation create-stack --stack-name vfx-deadline-repo --template-body file://deadline_repository/repository.template --parameters file://deadline_repository/repository-parameters.json --capabilities CAPABILITY_IAM --region eu-west-1`
+
+#### Testing connection from RenderFarm instance to DeadLine repository instance:
+
+Start session to RenderFarm instance (use SSM Session Manager to connect)
+
+> create mount point:
+
+`$ mkdir /mnt/repo`
+
+> mount the repo: 
+
+`mount -t cifs -o username=deadlineuser,password=<YourPassword> //<samba_server_address>/DeadlineRepository /mnt/repo`
+
+`<YourPassword>` is password for Samba set up earlier in the CloudFormation
+`<samba_server_address>` is Deadline Repository Private IP address.
