@@ -48,4 +48,5 @@ Start session to RenderFarm instance (use SSM Session Manager to connect)
 `mount -t cifs -o username=deadlineuser,password=<YourPassword> //<samba_server_address>/DeadlineRepository /mnt/repo`
 
 `<YourPassword>` is password for Samba set up earlier in the CloudFormation
+
 `<samba_server_address>` is Deadline Repository Private IP address.
