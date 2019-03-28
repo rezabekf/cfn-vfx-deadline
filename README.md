@@ -1,6 +1,6 @@
 # cfn-vfx-deadline
 
-Cloud formation template to deploy [DeadLine Database and Repository](https://docs.thinkboxsoftware.com/products/deadline/10.0/1_User%20Manual/manual/install-db-repo.html).
+Cloud formation template to deploy [DeadLine Database and Repository](https://docs.thinkboxsoftware.com/products/deadline/10.0/1_User%20Manual/manual/install-db-repo.html) on Linux OS
 as per advanced instructions.
 
 **! Important !**
