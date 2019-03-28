@@ -29,7 +29,7 @@ This is extension only and will not work without [quickstart-vfx-ise](https://gi
 > Create Stack 
 
 - **Option 2: via AWS Command Line**
-> from within the cfn-vpc-vfx-extension directory run command bellow 
+> from within the cfn-vfx-deadline directory run command bellow 
 
 `aws cloudformation create-stack --stack-name <MyStack> --template-body file://vpc-extension.template --parameters file://parameters.json --capabilities CAPABILITY_IAM --region <AWS-Region>`
 
