@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: Provides configuration for a DeadLine Database and Repository instance. (uksb-1pejj2dtk)
+Description: Provides configuration for a DeadLine Database and Repository instance.
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -72,9 +72,9 @@ Parameters:
     Type: String
     NoEcho: true
 
-  pRenderFarmSecurityGroup:
-    Description: Render Farm Security Group ID
-    Type: AWS::EC2::SecurityGroup::Id
+#  pRenderFarmSecurityGroup:
+#    Description: Render Farm Security Group ID
+#    Type: AWS::EC2::SecurityGroup::Id
 
   pEnvironment:
     AllowedValues:
@@ -97,13 +97,13 @@ Resources:
         - Key: Environment
           Value: !Ref pEnvironment
 
-  rRenderFarmToDeadLineRepoIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref rDeadLineRepoSecurityGroup
-      Description: render-farm-sg
-      IpProtocol: '-1'
-      SourceSecurityGroupId: !Ref pRenderFarmSecurityGroup
+#  rRenderFarmToDeadLineRepoIngress:
+#    Type: AWS::EC2::SecurityGroupIngress
+#    Properties:
+#      GroupId: !Ref rDeadLineRepoSecurityGroup
+#      Description: render-farm-sg
+#      IpProtocol: '-1'
+#      SourceSecurityGroupId: !Ref pRenderFarmSecurityGroup
 
   rDeadLineRepoInstanceRole:
     Type: AWS::IAM::Role
@@ -189,36 +189,30 @@ Resources:
                         unix extensions = No
               mode: '755'
           commands:
-            01_check_data:
-              command: !Sub |
-                #!/bin/bash -xe
-                EC2_INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
-
-                # Volume /dev/sdh (which will get created as /dev/xvdh on Amazon Linux)
-                DATA_STATE="unknown"
-                until [ "${!DATA_STATE}" == "attached" ]; do
-                  DATA_STATE=$(aws ec2 describe-volumes \
-                    --region ${AWS::Region} \
-                    --filters \
-                      Name=attachment.instance-id,Values=${!EC2_INSTANCE_ID} \
-                      Name=attachment.device,Values=/dev/sdh \
-                    --query Volumes[].Attachments[].State \
-                    --output text)
-                  sleep 5
-                done
-            02_mkfs:
+            01_wait_for_disk:
               command: |
                 #!/bin/bash -xe
-                # Format /dev/xvdh if it does not contain a partition yet
-                if [ "$(file -b -s /dev/xvdh)" == "data" ];
-                  then mkfs -t ext4 /dev/xvdh
-                fi
-            03_mkdir:
+                # By using the readlink command, this script will work on both, NVMe based instances types and on older instance types
+                while [[ ! -b $(readlink -f /dev/xvdh) ]]; do
+                    echo "waiting for the disk to appear..">&2
+                    sleep 5
+                done
+            02_format_disk:
+              command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
+            03_label_disk:
+              command: e2label $(readlink -f /dev/xvdh) wmq-data
+            04_mkdir:
               command: mkdir -p /data/Thinkbox
-            04_mount:
-              command: mount /dev/xvdh /data
-            05_fstab:
-              command: echo '/dev/xvdh /data ext4 defaults,nofail 0 2' >> /etc/fstab
+            05_mount_disk:
+              command: |
+                # generate the fstab entry
+                grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
+
+                # Remove all the old-style mount entries in /etc/fstab
+                sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
+
+                # mount the disk
+                grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
             06_awslogs:
               command: /tmp/awslog_init.sh
             07_mkdir:
@@ -253,7 +247,7 @@ Resources:
       IamInstanceProfile: !Ref rDeadLineRepoInstanceProfile
       InstanceType: !Ref pDeadLineRepoInstanceType
       BlockDeviceMappings:
-        - DeviceName: /dev/sdh
+        - DeviceName: /dev/xvdh
           Ebs:
             VolumeSize: 100
             VolumeType: gp2
