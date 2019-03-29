@@ -1,0 +1,4 @@
+[submodule "submodules"]
+	path = submodules
+	url = git@github.com:aws-quickstart/quickstart-vfx-ise.git
+	branch = master
