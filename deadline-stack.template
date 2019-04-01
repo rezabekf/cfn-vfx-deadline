@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: Creates AWS infrastructure and deploys Deadline render stack.
+Description: Creates AWS infrastructure and deploys Deadline render stack (uksb-1pejj2dtk)
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -25,18 +25,11 @@ Metadata:
           - pMgmtAppPrivateSubnetACIDR
           - pMgmtAppPrivateSubnetBCIDR
 
-#      - Label:
-#          default: Render farm instance configuration
-#        Parameters:
-#          - pRenderFarmTargetCapacity
-#
-#      - Label:
-#          default: License server configuration
-#        Parameters:
-#          - pLicenseServerInstanceType
-#          - pLicenseServerDesiredCapacity
-#          - pLicenseServerMaxCapacity
-#
+      - Label:
+          default: Render farm instance configuration
+        Parameters:
+          - pDeadlineRenderNodeTargetCapacity
+
       - Label:
           default: Render scheduler configuration
         Parameters:
@@ -85,17 +78,8 @@ Metadata:
       pMgmtAppPrivateSubnetBCIDR:
         default: Management VPC private subnet 2 CIDR
 
-#      pRenderFarmTargetCapacity:
-#        default: Capacity of Spot Fleet instances
-#
-#      pLicenseServerInstanceType:
-#        default: License server instance type
-#
-#      pLicenseServerDesiredCapacity:
-#        default: Desired capacity of license server
-#
-#      pLicenseServerMaxCapacity:
-#        default: Maximum capacity of license server
+      pDeadlineRenderNodeTargetCapacity:
+        default: Capacity of Spot Fleet instances
 
       pDeadLineRepoInstanceType:
         default: Render scheduler instance type
@@ -183,29 +167,13 @@ Parameters:
     Description: The CIDR block for the private subnet located in Availability Zone 2 of the management VPC.
     Type: String
 
-#  pRenderFarmTargetCapacity:
-#    Default: 2
-#    Description: The number of instances in the Spot Fleet.
-#    Type: String
-#
-#  pLicenseServerInstanceType:
-#    Default: t2.micro
-#    Description: The EC2 instance type for the license server.
-#    Type: String
-#
-#  pLicenseServerDesiredCapacity:
-#    Default: 1
-#    Description: The number of license server instances that you want to run in the Auto Scaling group.
-#      This number must be less than or equal to the maximum capacity you specify in the following parameter.
-#    Type: String
-#
-#  pLicenseServerMaxCapacity:
-#    Default: 1
-#    Description: The maximum number of license server instances that you can run in the Auto Scaling group.
-#    Type: String
-#
+  pDeadlineRenderNodeTargetCapacity:
+    Default: 1
+    Description: The number of instances in the Spot Fleet.
+    Type: String
+
   pDeadLineRepoInstanceType:
-    Default: m4.large
+    Default: m5.large
     Description: The EC2 instance type for the Deadline repository.
     Type: String
 
@@ -265,41 +233,6 @@ Parameters:
     Type: String
 
 Mappings:
-  RegionServiceSupport:
-    ap-northeast-1:
-      EFS: 'true'
-    ap-northeast-2:
-      EFS: 'true'
-    ap-northeast-3:
-      EFS: 'false'
-    ap-south-1:
-      EFS: 'false'
-    ap-southeast-1:
-      EFS: 'true'
-    ap-southeast-2:
-      EFS: 'true'
-    ca-central-1:
-      EFS: 'false'
-    eu-central-1:
-      EFS: 'true'
-    eu-west-1:
-      EFS: 'true'
-    eu-west-2:
-      EFS: 'true'
-    eu-north-1:
-      EFS: 'false'
-    eu-west-3:
-      EFS: 'false'
-    sa-east-1:
-      EFS: 'false'
-    us-east-1:
-      EFS: 'true'
-    us-east-2:
-      EFS: 'true'
-    us-west-1:
-      EFS: 'true'
-    us-west-2:
-      EFS: 'true'
   AWSAMIRegionMap:
     AMI:
       AMZNLINUX2AMI: amzn2-ami-hvm-2.0.20190228-x86_64-gp2
@@ -335,18 +268,6 @@ Mappings:
       AMZNLINUX2AMI: ami-09bfcadb25ee95bec
     us-west-2:
       AMZNLINUX2AMI: ami-095cd038eef3e5074
-
-#Rules:
-#  VfxSupportRegionRule:
-#    Assertions:
-#      - Assert:
-#          !Not
-#          - Fn::Contains:
-#              - - ap-south-1
-#              - !Ref AWS::Region
-#        AssertDescription: This Quick Start utilizes T3 instance type, which is not available in the
-#          Asia Pacific (Mumbai) region (January 2019). Please launch the stack in one of the supported
-#          regions to continue (https://aws.amazon.com/ec2/pricing/on-demand/)
 
 Resources:
   IamTemplate:
@@ -432,49 +353,6 @@ Resources:
         pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
         pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
 
-#  RenderFarmTemplate:
-#    Type: AWS::CloudFormation::Stack
-#    Properties:
-#      TemplateURL:
-#        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/render-farm.template
-#      TimeoutInMinutes: 30
-#      Parameters:
-#        pAvailabilityZones:
-#          Fn::Join:
-#            - ','
-#            - !Ref pAvailabilityZones
-#        pSupportsEfs: !FindInMap
-#          - RegionServiceSupport
-#          - !Ref AWS::Region
-#          - EFS
-#        pProductionVPC: !GetAtt ProductionVpcTemplate.Outputs.rVPCProduction
-#        pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
-#        pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
-#        pRenderFarmAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
-#        pRenderFarmTargetCapacity: !Ref pRenderFarmTargetCapacity
-#        pProjectName: !Ref pProjectName
-#        pEnvironment: !Ref pEnvironment
-
-#  LicenseServerTemplate:
-#    Type: AWS::CloudFormation::Stack
-#    Properties:
-#      TemplateURL:
-#        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/license-server.template
-#      TimeoutInMinutes: 30
-#      Parameters:
-#        pAvailabilityZones:
-#          Fn::Join:
-#            - ','
-#            - !Ref pAvailabilityZones
-#        pManagementVPC: !GetAtt ManagementVpcTemplate.Outputs.rVPCManagement
-#        pMgmtAppPrivateSubnetA: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetA
-#        pLicenseServerInstanceType: !Ref pLicenseServerInstanceType
-#        pLicenseServerAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
-#        pLicenseServerMinCapacity: '1'
-#        pLicenseServerDesiredCapacity: !Ref pLicenseServerDesiredCapacity
-#        pLicenseServerMaxCapacity: !Ref pLicenseServerMaxCapacity
-#        pEnvironment: !Ref pEnvironment
-
   DeadLineRepoTemplate:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -498,16 +376,28 @@ Resources:
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
         pEnvironment: !Ref pEnvironment
 
-#  SecurityGroupsHelperTemplate:
-#    Type: AWS::CloudFormation::Stack
-#    Properties:
-#      TemplateURL:
-#        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-vfx-ise/templates/security-groups-helper.template
-#      TimeoutInMinutes: 30
-#      Parameters:
-#        pLicenseServerSecurityGroup: !GetAtt LicenseServerTemplate.Outputs.rLicenseServerSecurityGroup
-#        pDeadLineRepoSecurityGroup: !GetAtt DeadLineRepoTemplate.Outputs.rDeadLineRepoSecurityGroup
-#        pRenderFarmSecurityGroup: !GetAtt RenderFarmTemplate.Outputs.rRenderFarmSecurityGroup
+  DeadlineRenderNodeTemplate:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_render_node/client.template
+      TimeoutInMinutes: 30
+      Parameters:
+        pAvailabilityZones:
+          Fn::Join:
+            - ','
+            - !Ref pAvailabilityZones
+        pProductionVPC: !GetAtt ProductionVpcTemplate.Outputs.rVPCProduction
+        pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
+        pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
+        pDeadlineRenderNodeAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
+        pDeadlineRenderNodeTargetCapacity: !Ref pDeadlineRenderNodeTargetCapacity
+        pDeadlineArtifacts: !Ref QSS3BucketName
+        pDeadLineRepoSecurityGroup: !GetAtt DeadLineRepoTemplate.Outputs.rDeadLineRepoSecurityGroup
+        pDeadlineRepositoryPrivateIp: !GetAtt DeadLineRepoTemplate.Outputs.rDeadLineRepoEC2Instance
+        pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
 
 Outputs:
   TemplateType:

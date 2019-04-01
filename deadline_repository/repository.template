@@ -135,8 +135,8 @@ Resources:
     Properties:
       RetentionInDays: 90
 
-  rDeadLineRepoLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  rDeadLineRepoEC2Instance:
+    Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
         config:
@@ -225,7 +225,9 @@ Resources:
               command: ls /data/downloads | grep Deadline | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
             11_install:
               command: ls /data/install | grep DeadlineRepository |
-                (read repo; /data/install/$repo --mode unattended --installmongodb true
+                (read repo; /data/install/$repo
+                --mode unattended
+                --installmongodb true
                 --prefix "/data/Thinkbox/DeadlineRepository10"
                 --mongodir "/data/Thinkbox/DeadlineDatabase10")
             12_user:
@@ -240,76 +242,40 @@ Resources:
               command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a deadlineuser
             17_samba_service:
               command: systemctl enable smb.service && systemctl restart smb.service
-
     Properties:
-      AssociatePublicIpAddress: false
-      ImageId: !Ref pDeadLineRepoAmi
-      IamInstanceProfile: !Ref rDeadLineRepoInstanceProfile
-      InstanceType: !Ref pDeadLineRepoInstanceType
       BlockDeviceMappings:
         - DeviceName: /dev/xvdh
           Ebs:
-            VolumeSize: 100
+            VolumeSize: 30
             VolumeType: gp2
             Encrypted: true
-      SecurityGroups:
+      IamInstanceProfile: !Ref rDeadLineRepoInstanceProfile
+      ImageId: !Ref pDeadLineRepoAmi
+      InstanceType: !Ref pDeadLineRepoInstanceType
+      SecurityGroupIds:
         - !Ref rDeadLineRepoSecurityGroup
+      SubnetId: !Ref pMgmtAppPrivateSubnetA
+      Tags:
+        - Key: Name
+          Value: vfx-deadline-repository
+        - Key: Environment
+          Value: !Ref pEnvironment
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
           yum update --security -y
           yum update aws-cfn-bootstrap -y
 
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadLineRepoLaunchConfiguration --region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadLineRepoEC2Instance --region ${AWS::Region}
           # Signal the status from cfn-init
-          /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadLineRepoAutoScalingGroup --region ${AWS::Region}
-
-  rDeadLineRepoAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AvailabilityZones:
-        - !Select [0, !Ref pAvailabilityZones]
-        - !Select [1, !Ref pAvailabilityZones]
-      VPCZoneIdentifier:
-        - !Ref pMgmtAppPrivateSubnetA
-        - !Ref pMgmtAppPrivateSubnetB
-      LaunchConfigurationName: !Ref rDeadLineRepoLaunchConfiguration
-      MinSize: !Ref pDeadLineRepoMinCapacity
-      DesiredCapacity: !Ref pDeadLineRepoDesiredCapacity
-      MaxSize: !Ref pDeadLineRepoMaxCapacity
-      HealthCheckType: EC2
-      HealthCheckGracePeriod: 0
-      Tags:
-        - Key: Name
-          Value: vfx-deadline-repository
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref pEnvironment
-          PropagateAtLaunch: true
-    CreationPolicy:
-      ResourceSignal:
-        Count: 1
-        Timeout: 'PT5M'
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 0
-        MaxBatchSize: 1
-        PauseTime: 'PT2M'
-        WaitOnResourceSignals: true
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+          /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadLineRepoEC2Instance --region ${AWS::Region}
 
 Outputs:
   rDeadLineRepoSecurityGroup:
     Value: !Ref rDeadLineRepoSecurityGroup
-    Export:
-      Name: eDeadLineRepoSecurityGroup
 
-  rDeadLineRepoLaunchConfiguration:
-    Value: !Ref rDeadLineRepoLaunchConfiguration
-
-  rDeadLineRepoAutoScalingGroup:
-    Value: !Ref rDeadLineRepoAutoScalingGroup
+  rDeadLineRepoEC2Instance:
+    Value: !GetAtt rDeadLineRepoEC2Instance.PrivateIp
 
   rDeadLineRepoInstanceRole:
     Value: !Ref rDeadLineRepoInstanceRole
