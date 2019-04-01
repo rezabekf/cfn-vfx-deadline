@@ -1,0 +1,310 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Provides configuration for a Deadline render client instances.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Region Configuration
+        Parameters:
+          - pAvailabilityZones
+
+      - Label:
+          default: Network (existing Production VPC config)
+        Parameters:
+          - pProductionVPC
+          - pProdAppPrivateSubnetA
+          - pProdAppPrivateSubnetB
+
+      - Label:
+          default: Render client instance configuration
+        Parameters:
+          - pDeadlineRenderNodeAmi
+          - pDeadlineRenderNodeTargetCapacity
+
+Parameters:
+  pAvailabilityZones:
+    Description: The list of Availability Zones to use for the subnets in the VPC.
+      This template uses two Availability Zones from your list and preserves the logical order you specify.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+
+  pProductionVPC:
+    Type: AWS::EC2::VPC::Id
+
+  pProdAppPrivateSubnetA:
+    Description: Production Application Subnet A (private)
+    Type: AWS::EC2::Subnet::Id
+
+  pProdAppPrivateSubnetB:
+    Description: Production Application Subnet B (private)
+    Type: AWS::EC2::Subnet::Id
+
+  pDeadlineRenderNodeAmi:
+    Description: Which AMI do you want to use for Render Instances?
+    Type: AWS::EC2::Image::Id
+
+  pDeadlineRenderNodeTargetCapacity:
+    Default: 1
+    Description: The number of instances in the spot fleet
+    Type: String
+
+  pDeadlineArtifacts:
+    Description: S3 bucket name with DeadLine Artifacts
+    Type: String
+
+  pDeadLineRepoSecurityGroup:
+    Description: Deadline repo security group
+    Type: AWS::EC2::SecurityGroup::Id
+
+  pDeadlineRepositoryPrivateIp:
+    Description: Privat IP of Deadline repository imstance
+    Type: String
+
+  pDeadlineRepositorySambaPassword:
+    Description: Password for Samba
+    Type: String
+    NoEcho: true
+
+  pProjectName:
+    Default: Deadline client
+    Description: Project name
+    Type: String
+
+  pEnvironment:
+    AllowedValues:
+      - DEV
+      - TEST
+      - PROD
+    Default: DEV
+    Description: Environment (Dev, Test or Prod)
+    Type: String
+
+Mappings:
+  RegionMap:
+    ap-northeast-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    ap-northeast-2:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    ap-south-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    ap-southeast-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    ap-southeast-2:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    ca-central-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    eu-central-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    eu-west-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    eu-west-2:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    sa-east-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    us-east-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    us-east-2:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    us-west-1:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+    us-west-2:
+      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+
+Resources:
+  rDeadlineRenderNodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref pProductionVPC
+      GroupDescription: Render client security group
+      Tags:
+        - Key: Name
+          Value: deadline-rendernode-sg
+        - Key: Environment
+          Value: !Ref pEnvironment
+
+  rRenderFarmToRenderSchedulerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref pDeadLineRepoSecurityGroup
+      Description: deadline-rendernode-sg
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
+
+  rDeadlineRenderNodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  rDeadlineRenderNodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref rDeadlineRenderNodeInstanceRole
+
+  rSpotFleetRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - spotfleet.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetRole
+
+  rDeadlineRenderNodeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 90
+
+  rDeadlineRenderNodeLaunchTemplateEfs:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              jq: []
+              awslogs: []
+          files:
+            /etc/awslogs/awslogs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/lib/awslogs/agent-state
+
+                [/var/log/messages]
+                file = /var/log/messages
+                log_group_name = ${rDeadlineRenderNodeLogGroup}
+                log_stream_name = %INSTANCE_ID/var/log/messages
+                datetime_format = %b %d %H:%M:%S
+                initial_position = start_of_file
+            /tmp/awslog_init.sh:
+              content: !Sub |
+                #!/bin/bash -xe
+                INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
+                sed -i "s|%INSTANCE_ID|$INSTANCE_ID|g" /etc/awslogs/awslogs.conf
+                sed -i -e "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
+                systemctl enable awslogsd.service
+                systemctl start awslogsd.service
+              mode: '755'
+          commands:
+              01_format_disk:
+                command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
+              02_label_disk:
+                command: e2label $(readlink -f /dev/xvdh) wmq-data
+              03_mkdir_data:
+                command: mkdir -p /data
+              04_mount_disk:
+                command: |
+                  # generate the fstab entry
+                  grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
+
+                  # Remove all the old-style mount entries in /etc/fstab
+                  sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
+
+                  # mount the disk
+                  grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
+
+              05_mkdir_repo:
+                command: mkdir -p /data/DeadlineRepository
+              06_mount_deadline_repo:
+                command: !Sub |
+                  # create fstab entry for Deadline repository
+                  echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
+
+                  # mount the Deadline repository
+                  mount -a
+              07_awslogs:
+                command: /tmp/awslog_init.sh
+              08_mkdir_downloads:
+                command: mkdir -p /data/downloads
+              09_copy_deadline_files_from_s3:
+                command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
+              10_mkdir_install:
+                command: mkdir -p /data/install
+              11_untar:
+                command: ls /data/downloads | grep Deadline | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+              12_install:
+                command: ls /data/install | grep DeadlineClient |
+                  (read repo; /data/install/$repo
+                  --mode unattended
+                  --prefix "/data/Thinkbox/Deadline10"
+                  --repositorydir "/data/DeadlineRepository")
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvdh
+            Ebs:
+              VolumeSize: 40
+              VolumeType: gp2
+              Encrypted: true
+        ImageId: !Ref pDeadlineRenderNodeAmi
+        IamInstanceProfile:
+          Name: !Ref rDeadlineRenderNodeInstanceProfile
+        SecurityGroupIds:
+          - !Ref rDeadlineRenderNodeSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: vfx-deadline-rendernode
+              - Key: Environment
+                Value: !Ref pEnvironment
+              - Key: Project
+                Value: !Ref pProjectName
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum update --security -y
+            yum update aws-cfn-bootstrap -y
+
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineRenderNodeLaunchTemplateEfs --region ${AWS::Region}
+
+  rDeadlineRenderNodeSpotFleet:
+    Type: AWS::EC2::SpotFleet
+    Properties:
+      SpotFleetRequestConfigData:
+        AllocationStrategy: 'diversified'
+        IamFleetRole: !GetAtt rSpotFleetRole.Arn
+        TargetCapacity: !Ref pDeadlineRenderNodeTargetCapacity
+        LaunchTemplateConfigs:
+          - LaunchTemplateSpecification:
+              LaunchTemplateId: !Ref rDeadlineRenderNodeLaunchTemplateEfs
+              Version: '1'
+            Overrides:
+              - InstanceType: !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', InstanceTypes]]
+                AvailabilityZone: !Select [0, !Ref pAvailabilityZones]
+                SubnetId: !Ref pProdAppPrivateSubnetA
+              - InstanceType: !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', InstanceTypes]]
+                AvailabilityZone: !Select [1, !Ref pAvailabilityZones]
+                SubnetId: !Ref pProdAppPrivateSubnetB
+
+Outputs:
+  rDeadlineRenderNodeSecurityGroup:
+    Value: !Ref rDeadlineRenderNodeSecurityGroup
+    Export:
+      Name: eDeadlineRenderNodeSecurityGroup
+
+  rDeadlineRenderNodeInstanceRole:
+    Value: !Ref rDeadlineRenderNodeInstanceRole
+
+  rDeadlineRenderNodeLaunchTemplate:
+    Value: !Ref rDeadlineRenderNodeLaunchTemplateEfs
+
+  rDeadlineRenderNodeSpotFleet:
+    Value: !Ref rDeadlineRenderNodeSpotFleet
