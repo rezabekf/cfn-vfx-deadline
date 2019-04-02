@@ -4,6 +4,14 @@
         "ParameterValue": "eu-west-1a, eu-west-1b"
     },
     {
+        "ParameterKey": "pDeadlineRenderNodeTargetCapacity",
+        "ParameterValue": "1"
+    },
+    {
+        "ParameterKey": "pDeadLineRepoInstanceType",
+        "ParameterValue": "m4.large"
+    },
+    {
         "ParameterKey": "pNotifyEmail",
         "ParameterValue": "email@example.com"
     },
