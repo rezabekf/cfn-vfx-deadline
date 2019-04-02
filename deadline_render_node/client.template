@@ -238,13 +238,16 @@ Resources:
               10_mkdir_install:
                 command: mkdir -p /data/install
               11_untar:
-                command: ls /data/downloads | grep Deadline | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+                command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
               12_install:
                 command: ls /data/install | grep DeadlineClient |
                   (read repo; /data/install/$repo
                   --mode unattended
                   --prefix "/data/Thinkbox/Deadline10"
-                  --repositorydir "/data/DeadlineRepository")
+                  --repositorydir "/data/DeadlineRepository"
+                  --noguimode true
+                  --launcherstartup true
+                  --slavestartup true)
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
