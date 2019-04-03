@@ -203,51 +203,57 @@ Resources:
                 systemctl start awslogsd.service
               mode: '755'
           commands:
-              01_format_disk:
-                command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
-              02_label_disk:
-                command: e2label $(readlink -f /dev/xvdh) wmq-data
-              03_mkdir_data:
-                command: mkdir -p /data
-              04_mount_disk:
-                command: |
-                  # generate the fstab entry
-                  grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
+            01_format_disk:
+              command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
+            02_label_disk:
+              command: e2label $(readlink -f /dev/xvdh) wmq-data
+            03_mkdir_data:
+              command: mkdir -p /data
+            04_mount_disk:
+              command: |
+                # generate the fstab entry
+                grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
 
-                  # Remove all the old-style mount entries in /etc/fstab
-                  sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
+                # Remove all the old-style mount entries in /etc/fstab
+                sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
 
-                  # mount the disk
-                  grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
+                # mount the disk
+                grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
 
-              05_mkdir_repo:
-                command: mkdir -p /data/DeadlineRepository
-              06_mount_deadline_repo:
-                command: !Sub |
-                  # create fstab entry for Deadline repository
-                  echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
+            05_mkdir_repo:
+              command: mkdir -p /data/DeadlineRepository
+            06_mount_deadline_repo:
+              command: !Sub |
+                # create fstab entry for Deadline repository
+                echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
 
-                  # mount the Deadline repository
-                  mount -a
-              07_awslogs:
-                command: /tmp/awslog_init.sh
-              08_mkdir_downloads:
-                command: mkdir -p /data/downloads
-              09_copy_deadline_files_from_s3:
-                command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
-              10_mkdir_install:
-                command: mkdir -p /data/install
-              11_untar:
-                command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
-              12_install:
-                command: ls /data/install | grep DeadlineClient |
-                  (read repo; /data/install/$repo
-                  --mode unattended
-                  --prefix "/data/Thinkbox/Deadline10"
-                  --repositorydir "/data/DeadlineRepository"
-                  --noguimode true
-                  --launcherstartup true
-                  --slavestartup true)
+                # mount the Deadline repository
+                mount -a
+            07_awslogs:
+              command: /tmp/awslog_init.sh
+            08_mkdir_downloads:
+              command: mkdir -p /data/downloads
+            09_copy_deadline_files_from_s3:
+              command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
+            10_mkdir_install:
+              command: mkdir -p /data/install
+            11_untar:
+              command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+            12_mkdir_thinkbox:
+              command: mkdir -p /data/Thinkbox
+            13_install:
+              command: ls /data/install | grep DeadlineClient |
+                (read repo; /data/install/$repo
+                --mode unattended
+                --prefix "/data/Thinkbox/Deadline10"
+                --connectiontype Repository
+                --repositorydir "/data/DeadlineRepository"
+                --noguimode true
+                --licensemode LicenseFree
+                --launcherstartup true
+                --slavestartup true
+                --daemonuser ""
+                --launcherdaemon true)
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:

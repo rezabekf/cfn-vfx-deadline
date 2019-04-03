@@ -246,6 +246,7 @@ Mappings:
       AMZNLINUX2AMI: ami-07a5200f3fa9c33d3
     eu-west-1:
       AMZNLINUX2AMI: ami-02a39bdb8e8ee056a
+      UBUNTU18AMI: ami-0204cddbf060b2420
     ap-northeast-2:
       AMZNLINUX2AMI: ami-045e355a6004a67c4
     ap-northeast-1:

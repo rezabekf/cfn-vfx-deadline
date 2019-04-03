@@ -5,11 +5,11 @@
     },
     {
         "ParameterKey": "pDeadlineRenderNodeTargetCapacity",
-        "ParameterValue": "1"
+        "ParameterValue": "2"
     },
     {
         "ParameterKey": "pDeadLineRepoInstanceType",
-        "ParameterValue": "m4.large"
+        "ParameterValue": "m5.large"
     },
     {
         "ParameterKey": "pNotifyEmail",

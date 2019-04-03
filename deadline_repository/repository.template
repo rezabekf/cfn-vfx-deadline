@@ -227,8 +227,8 @@ Resources:
               command: ls /data/install | grep DeadlineRepository |
                 (read repo; /data/install/$repo
                 --mode unattended
-                --installmongodb true
                 --prefix "/data/Thinkbox/DeadlineRepository10"
+                --installmongodb true
                 --mongodir "/data/Thinkbox/DeadlineDatabase10"
                 --requireSSL false)
             12_user:
