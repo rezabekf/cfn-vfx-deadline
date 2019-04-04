@@ -33,9 +33,9 @@ Metadata:
       - Label:
           default: Render scheduler configuration
         Parameters:
-          - pDeadLineRepoInstanceType
-          - pDeadLineRepoDesiredCapacity
-          - pDeadLineRepoMaxCapacity
+          - pDeadlineRepoInstanceType
+          - pDeadlineRepoDesiredCapacity
+          - pDeadlineRepoMaxCapacity
 
       - Label:
           default: Email and environment configuration
@@ -81,14 +81,8 @@ Metadata:
       pDeadlineRenderNodeTargetCapacity:
         default: Capacity of Spot Fleet instances
 
-      pDeadLineRepoInstanceType:
+      pDeadlineRepoInstanceType:
         default: Render scheduler instance type
-
-      pDeadLineRepoDesiredCapacity:
-        default: Desired capacity of render scheduler
-
-      pDeadLineRepoMaxCapacity:
-        default: Maximum capacity of render scheduler
 
       pProjectName:
         default: Project name
@@ -172,18 +166,18 @@ Parameters:
     Description: The number of instances in the Spot Fleet.
     Type: String
 
-  pDeadLineRepoInstanceType:
+  pDeadlineRepoInstanceType:
     Default: t2.micro
     Description: The EC2 instance type for the Deadline repository.
     Type: String
 
-  pDeadLineRepoDesiredCapacity:
+  pDeadlineRepoDesiredCapacity:
     Default: 1
     Description: The number of render scheduler instances that you want to run in the Auto Scaling group.
       This number must be less than or equal to the maximum capacity you specify in the following parameter.
     Type: String
 
-  pDeadLineRepoMaxCapacity:
+  pDeadlineRepoMaxCapacity:
     Default: 1
     Description: The maximum number of render scheduler instances that you can run in the Auto Scaling group.
     Type: String
@@ -233,6 +227,42 @@ Parameters:
     Type: String
 
 Mappings:
+  RegionServiceSupport:
+    ap-northeast-1:
+      EFS: 'true'
+    ap-northeast-2:
+      EFS: 'true'
+    ap-northeast-3:
+      EFS: 'false'
+    ap-south-1:
+      EFS: 'false'
+    ap-southeast-1:
+      EFS: 'true'
+    ap-southeast-2:
+      EFS: 'true'
+    ca-central-1:
+      EFS: 'false'
+    eu-central-1:
+      EFS: 'true'
+    eu-west-1:
+      EFS: 'true'
+    eu-west-2:
+      EFS: 'true'
+    eu-north-1:
+      EFS: 'false'
+    eu-west-3:
+      EFS: 'false'
+    sa-east-1:
+      EFS: 'false'
+    us-east-1:
+      EFS: 'true'
+    us-east-2:
+      EFS: 'true'
+    us-west-1:
+      EFS: 'true'
+    us-west-2:
+      EFS: 'true'
+
   AWSAMIRegionMap:
     AMI:
       AMZNLINUX2AMI: amzn2-ami-hvm-2.0.20190228-x86_64-gp2
@@ -354,7 +384,7 @@ Resources:
         pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
         pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
 
-  DeadLineRepoTemplate:
+  DeadlineRepoTemplate:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL:
@@ -368,11 +398,8 @@ Resources:
         pManagementVPC: !GetAtt ManagementVpcTemplate.Outputs.rVPCManagement
         pMgmtAppPrivateSubnetA: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetA
         pMgmtAppPrivateSubnetB: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetB
-        pDeadLineRepoInstanceType: !Ref pDeadLineRepoInstanceType
-        pDeadLineRepoAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
-        pDeadLineRepoMinCapacity: '1'
-        pDeadLineRepoDesiredCapacity: !Ref pDeadLineRepoDesiredCapacity
-        pDeadLineRepoMaxCapacity: !Ref pDeadLineRepoMaxCapacity
+        pDeadlineRepoInstanceType: !Ref pDeadlineRepoInstanceType
+        pDeadlineRepoAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
         pDeadlineArtifacts: !Ref QSS3BucketName
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
         pEnvironment: !Ref pEnvironment
@@ -381,21 +408,25 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL:
-        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_render_node/client.template
+        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_client/render_node.template
       TimeoutInMinutes: 30
       Parameters:
         pAvailabilityZones:
           Fn::Join:
             - ','
             - !Ref pAvailabilityZones
+        pSupportsEfs: !FindInMap
+          - RegionServiceSupport
+          - !Ref AWS::Region
+          - EFS
         pProductionVPC: !GetAtt ProductionVpcTemplate.Outputs.rVPCProduction
         pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
         pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
         pDeadlineRenderNodeAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
         pDeadlineRenderNodeTargetCapacity: !Ref pDeadlineRenderNodeTargetCapacity
         pDeadlineArtifacts: !Ref QSS3BucketName
-        pDeadLineRepoSecurityGroup: !GetAtt DeadLineRepoTemplate.Outputs.rDeadLineRepoSecurityGroup
-        pDeadlineRepositoryPrivateIp: !GetAtt DeadLineRepoTemplate.Outputs.rDeadLineRepoEC2Instance
+        pDeadlineRepoSecurityGroup: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoSecurityGroup
+        pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
         pProjectName: !Ref pProjectName
         pEnvironment: !Ref pEnvironment
