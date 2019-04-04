@@ -8,8 +8,8 @@
         "ParameterValue": "2"
     },
     {
-        "ParameterKey": "pDeadLineRepoInstanceType",
-        "ParameterValue": "m5.large"
+        "ParameterKey": "pDeadlineRepoInstanceType",
+        "ParameterValue": "m5.xlarge"
     },
     {
         "ParameterKey": "pNotifyEmail",

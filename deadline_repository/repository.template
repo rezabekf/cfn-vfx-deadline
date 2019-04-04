@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: Provides configuration for a DeadLine Database and Repository instance.
+Description: Provides configuration for a Deadline Database and Repository instance.
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -19,11 +19,8 @@ Metadata:
       - Label:
           default: Render Scheduler Configuration
         Parameters:
-          - pDeadLineRepoInstanceType
-          - pDeadLineRepoAmi
-          - pDeadLineRepoMinCapacity
-          - pDeadLineRepoDesiredCapacity
-          - pDeadLineRepoMaxCapacity
+          - pDeadlineRepoInstanceType
+          - pDeadlineRepoAmi
 
 Parameters:
   pAvailabilityZones:
@@ -43,38 +40,22 @@ Parameters:
     Description: Render Scheduler Subnet B
     Type: AWS::EC2::Subnet::Id
 
-  pDeadLineRepoInstanceType:
+  pDeadlineRepoInstanceType:
     Description: Instance type for the Render Scheduler
     Type: String
 
-  pDeadLineRepoAmi:
+  pDeadlineRepoAmi:
     Description: Which Render Scheduler AMI do you want to use?
     Type: AWS::EC2::Image::Id
 
-  pDeadLineRepoMinCapacity:
-    Description: The minimum number of instances that can run in your auto scale group
-    Type: String
-
-  pDeadLineRepoDesiredCapacity:
-    Description: The desired capacity must be less than or equal to the maximum capacity
-    Type: String
-
-  pDeadLineRepoMaxCapacity:
-    Description: The maximum number of instances that you can run in your auto scale group
-    Type: String
-
   pDeadlineArtifacts:
-    Description: S3 bucket name with DeadLine Artifacts
+    Description: S3 bucket name with Deadline Artifacts
     Type: String
 
   pDeadlineRepositorySambaPassword:
     Description: Password for Samba
     Type: String
     NoEcho: true
-
-#  pRenderFarmSecurityGroup:
-#    Description: Render Farm Security Group ID
-#    Type: AWS::EC2::SecurityGroup::Id
 
   pEnvironment:
     AllowedValues:
@@ -86,26 +67,18 @@ Parameters:
     Type: String
 
 Resources:
-  rDeadLineRepoSecurityGroup:
+  rDeadlineRepoSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Render Scheduler Instances
       VpcId: !Ref pManagementVPC
       Tags:
         - Key: Name
-          Value: deadline-repo-sg
+          Value: vfx-Deadline-repo-sg
         - Key: Environment
           Value: !Ref pEnvironment
 
-#  rRenderFarmToDeadLineRepoIngress:
-#    Type: AWS::EC2::SecurityGroupIngress
-#    Properties:
-#      GroupId: !Ref rDeadLineRepoSecurityGroup
-#      Description: render-farm-sg
-#      IpProtocol: '-1'
-#      SourceSecurityGroupId: !Ref pRenderFarmSecurityGroup
-
-  rDeadLineRepoInstanceRole:
+  rDeadlineRepoInstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -123,19 +96,19 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
 
-  rDeadLineRepoInstanceProfile:
+  rDeadlineRepoInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
       Roles:
-        - !Ref rDeadLineRepoInstanceRole
+        - !Ref rDeadlineRepoInstanceRole
 
-  rDeadLineRepoLogGroup:
+  rDeadlineRepoLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 90
 
-  rDeadLineRepoEC2Instance:
+  rDeadlineRepoEC2Instance:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
@@ -153,7 +126,7 @@ Resources:
 
                 [/var/log/messages]
                 file = /var/log/messages
-                log_group_name = ${rDeadLineRepoLogGroup}
+                log_group_name = ${rDeadlineRepoLogGroup}
                 log_stream_name = %INSTANCE_ID/var/log/messages
                 datetime_format = %b %d %H:%M:%S
                 initial_position = start_of_file
@@ -217,7 +190,7 @@ Resources:
               command: /tmp/awslog_init.sh
             07_mkdir:
               command: mkdir -p /data/downloads
-            08_copy_deadline_files_from_s3:
+            08_copy_Deadline_files_from_s3:
               command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
             09_mkdir:
               command: mkdir -p /data/install
@@ -232,15 +205,15 @@ Resources:
                 --mongodir "/data/Thinkbox/DeadlineDatabase10"
                 --requireSSL false)
             12_user:
-              command: useradd deadlineuser
+              command: useradd Deadlineuser
             13_repo_owner:
-              command: chown -R deadlineuser:nobody /data/Thinkbox/DeadlineRepository10
+              command: chown -R Deadlineuser:nobody /data/Thinkbox/DeadlineRepository10
             14_repo_permissions:
               command: chmod -R 500 /data/Thinkbox/DeadlineRepository10
             15_repo_full_permissions:
               command: cd /data/Thinkbox/DeadlineRepository10 && chmod -R 700 jobs/ jobsArchived/ reports/
             16_samba_user:
-              command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a deadlineuser
+              command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a Deadlineuser
             17_samba_service:
               command: systemctl enable smb.service && systemctl restart smb.service
     Properties:
@@ -250,15 +223,15 @@ Resources:
             VolumeSize: 30
             VolumeType: gp2
             Encrypted: true
-      IamInstanceProfile: !Ref rDeadLineRepoInstanceProfile
-      ImageId: !Ref pDeadLineRepoAmi
-      InstanceType: !Ref pDeadLineRepoInstanceType
+      IamInstanceProfile: !Ref rDeadlineRepoInstanceProfile
+      ImageId: !Ref pDeadlineRepoAmi
+      InstanceType: !Ref pDeadlineRepoInstanceType
       SecurityGroupIds:
-        - !Ref rDeadLineRepoSecurityGroup
+        - !Ref rDeadlineRepoSecurityGroup
       SubnetId: !Ref pMgmtAppPrivateSubnetA
       Tags:
         - Key: Name
-          Value: vfx-deadline-repository
+          Value: vfx-Deadline-repository
         - Key: Environment
           Value: !Ref pEnvironment
       UserData:
@@ -267,16 +240,16 @@ Resources:
           yum update --security -y
           yum update aws-cfn-bootstrap -y
 
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadLineRepoEC2Instance --region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineRepoEC2Instance --region ${AWS::Region}
           # Signal the status from cfn-init
-          /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadLineRepoEC2Instance --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadlineRepoEC2Instance --region ${AWS::Region}
 
 Outputs:
-  rDeadLineRepoSecurityGroup:
-    Value: !Ref rDeadLineRepoSecurityGroup
+  rDeadlineRepoSecurityGroup:
+    Value: !Ref rDeadlineRepoSecurityGroup
 
-  rDeadLineRepoEC2Instance:
-    Value: !GetAtt rDeadLineRepoEC2Instance.PrivateIp
+  rDeadlineRepoEC2Instance:
+    Value: !GetAtt rDeadlineRepoEC2Instance.PrivateIp
 
-  rDeadLineRepoInstanceRole:
-    Value: !Ref rDeadLineRepoInstanceRole
+  rDeadlineRepoInstanceRole:
+    Value: !Ref rDeadlineRepoInstanceRole
