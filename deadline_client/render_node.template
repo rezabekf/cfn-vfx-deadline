@@ -8,6 +8,7 @@ Metadata:
           default: Region Configuration
         Parameters:
           - pAvailabilityZones
+          - pSupportsEfs
 
       - Label:
           default: Network (existing Production VPC config)
@@ -27,6 +28,13 @@ Parameters:
     Description: The list of Availability Zones to use for the subnets in the VPC.
       This template uses two Availability Zones from your list and preserves the logical order you specify.
     Type: List<AWS::EC2::AvailabilityZone::Name>
+
+  pSupportsEfs:
+    AllowedValues:
+      - true
+      - false
+    Description: Determines if this region supports EFS (passed in from Main template)
+    Type: String
 
   pProductionVPC:
     Type: AWS::EC2::VPC::Id
@@ -49,10 +57,10 @@ Parameters:
     Type: String
 
   pDeadlineArtifacts:
-    Description: S3 bucket name with DeadLine Artifacts
+    Description: S3 bucket name with Deadline Artifacts
     Type: String
 
-  pDeadLineRepoSecurityGroup:
+  pDeadlineRepoSecurityGroup:
     Description: Deadline repo security group
     Type: AWS::EC2::SecurityGroup::Id
 
@@ -82,33 +90,41 @@ Parameters:
 Mappings:
   RegionMap:
     ap-northeast-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     ap-northeast-2:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     ap-south-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     ap-southeast-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     ap-southeast-2:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     ca-central-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     eu-central-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     eu-west-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     eu-west-2:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     sa-east-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     us-east-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     us-east-2:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     us-west-1:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
     us-west-2:
-      InstanceTypes: [g3s.xlarge, g3.4xlarge]
+      InstanceTypes: [c5.large, c4.large]
+
+Conditions:
+  SupportsEfs: !Equals
+    - !Ref pSupportsEfs
+    - true
+
+  NoEfsSupport: !Not
+    - Condition: SupportsEfs
 
 Resources:
   rDeadlineRenderNodeSecurityGroup:
@@ -118,17 +134,64 @@ Resources:
       GroupDescription: Render client security group
       Tags:
         - Key: Name
-          Value: deadline-rendernode-sg
+          Value: vfx-Deadline-rendernode-sg
         - Key: Environment
           Value: !Ref pEnvironment
 
-  rRenderFarmToRenderSchedulerIngress:
+  rDeadlineRenderNodeToDedlineRepoIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref pDeadLineRepoSecurityGroup
-      Description: deadline-rendernode-sg
+      GroupId: !Ref pDeadlineRepoSecurityGroup
+      Description: Deadline-rendernode-sg
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
+
+  rDeadlineRenderNodeEfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: SupportsEfs
+    Properties:
+      VpcId: !Ref pProductionVPC
+      GroupDescription: Security group for render farm mount target
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
+      Tags:
+        - Key: Name
+          Value: vfx-Deadline-efs-sg
+        - Key: Environment
+          Value: !Ref pEnvironment
+
+  rDeadlineRenderNodeEfs:
+    Type: AWS::EFS::FileSystem
+    Condition: SupportsEfs
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+        - Key: Name
+          Value: vfx-Deadline-fs
+        - Key: Project
+          Value: !Ref pProjectName
+
+  rDeadlineRenderNodeEfsMountTarget0:
+    Type: AWS::EFS::MountTarget
+    Condition: SupportsEfs
+    Properties:
+      FileSystemId: !Ref rDeadlineRenderNodeEfs
+      SubnetId: !Ref pProdAppPrivateSubnetA
+      SecurityGroups:
+        - !Ref rDeadlineRenderNodeEfsSecurityGroup
+
+  rDeadlineRenderNodeEfsMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Condition: SupportsEfs
+    Properties:
+      FileSystemId: !Ref rDeadlineRenderNodeEfs
+      SubnetId: !Ref pProdAppPrivateSubnetB
+      SecurityGroups:
+        - !Ref rDeadlineRenderNodeEfsSecurityGroup
 
   rDeadlineRenderNodeInstanceRole:
     Type: AWS::IAM::Role
@@ -172,7 +235,24 @@ Resources:
     Properties:
       RetentionInDays: 90
 
+  rDeadlineRenderNodeLaunchTemplateNoEfs:
+    Condition: NoEfsSupport
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref pDeadlineRenderNodeAmi
+        IamInstanceProfile:
+          Name: !Ref rDeadlineRenderNodeInstanceProfile
+        SecurityGroupIds:
+          - !Ref rDeadlineRenderNodeSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: vfx-empty-no-efs
+
   rDeadlineRenderNodeLaunchTemplateEfs:
+    Condition: SupportsEfs
     Type: AWS::EC2::LaunchTemplate
     Metadata:
       AWS::CloudFormation::Init:
@@ -182,6 +262,18 @@ Resources:
               jq: []
               awslogs: []
           files:
+            /tmp/dns.sh:
+              content: !Sub |
+                #!/bin/bash -x
+                results=1
+                while [[ $results != 0 ]]; do
+                  nslookup ${rDeadlineRenderNodeEfs}.efs.${AWS::Region}.amazonaws.com
+                  results=$?
+                  if [[ $results = 1 ]]; then
+                    sleep 30s
+                  fi
+                done
+              mode: '755'
             /etc/awslogs/awslogs.conf:
               content: !Sub |
                 [general]
@@ -222,26 +314,24 @@ Resources:
 
             05_mkdir_repo:
               command: mkdir -p /data/DeadlineRepository
-            06_mount_deadline_repo:
+            06_mount_Deadline_repo:
               command: !Sub |
                 # create fstab entry for Deadline repository
-                echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
+                echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=Deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
 
                 # mount the Deadline repository
                 mount -a
-            07_awslogs:
-              command: /tmp/awslog_init.sh
-            08_mkdir_downloads:
+            07_mkdir_downloads:
               command: mkdir -p /data/downloads
-            09_copy_deadline_files_from_s3:
+            08_copy_Deadline_files_from_s3:
               command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
-            10_mkdir_install:
+            09_mkdir_install:
               command: mkdir -p /data/install
-            11_untar:
+            10_untar:
               command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
-            12_mkdir_thinkbox:
+            11_mkdir_thinkbox:
               command: mkdir -p /data/Thinkbox
-            13_install:
+            12_install:
               command: ls /data/install | grep DeadlineClient |
                 (read repo; /data/install/$repo
                 --mode unattended
@@ -254,6 +344,18 @@ Resources:
                 --slavestartup true
                 --daemonuser ""
                 --launcherdaemon true)
+            13_wait_for_dns_propogation:
+              command: /tmp/dns.sh
+            14_mount_efs:
+              command: !Sub |
+                #!/bin/bash -xe
+                EFS_DIRECTORY=/mnt/efs
+                mkdir $EFS_DIRECTORY
+                echo "${rDeadlineRenderNodeEfs}:/ $EFS_DIRECTORY efs _netdev" >> /etc/fstab
+                mount -a -t efs defaults
+            15_awslogs:
+              command: /tmp/awslog_init.sh
+
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
@@ -271,7 +373,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: vfx-deadline-rendernode
+                Value: vfx-Deadline-rendernode
               - Key: Environment
                 Value: !Ref pEnvironment
               - Key: Project
@@ -281,6 +383,7 @@ Resources:
             #!/bin/bash -xe
             yum update --security -y
             yum update aws-cfn-bootstrap -y
+            yum install amazon-efs-utils -y
 
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineRenderNodeLaunchTemplateEfs --region ${AWS::Region}
 
@@ -306,14 +409,15 @@ Resources:
 Outputs:
   rDeadlineRenderNodeSecurityGroup:
     Value: !Ref rDeadlineRenderNodeSecurityGroup
-    Export:
-      Name: eDeadlineRenderNodeSecurityGroup
 
   rDeadlineRenderNodeInstanceRole:
     Value: !Ref rDeadlineRenderNodeInstanceRole
 
   rDeadlineRenderNodeLaunchTemplate:
-    Value: !Ref rDeadlineRenderNodeLaunchTemplateEfs
+    Value: !If
+      - SupportsEfs
+      - !Ref rDeadlineRenderNodeLaunchTemplateEfs
+      - !Ref rDeadlineRenderNodeLaunchTemplateEfs
 
   rDeadlineRenderNodeSpotFleet:
     Value: !Ref rDeadlineRenderNodeSpotFleet
