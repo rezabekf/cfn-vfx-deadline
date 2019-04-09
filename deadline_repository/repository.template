@@ -5,16 +5,10 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Region Configuration
-        Parameters:
-          - pAvailabilityZones
-
-      - Label:
           default: Network (existing Management VPC config)
         Parameters:
           - pManagementVPC
           - pMgmtAppPrivateSubnetA
-          - pMgmtAppPrivateSubnetB
 
       - Label:
           default: Render Scheduler Configuration
@@ -23,21 +17,12 @@ Metadata:
           - pDeadlineRepoAmi
 
 Parameters:
-  pAvailabilityZones:
-    Description: The list of Availability Zones to use for the subnets in the VPC.
-      This template uses two Availability Zones from your list and preserves the logical order you specify.
-    Type: List<AWS::EC2::AvailabilityZone::Name>
-
   pManagementVPC:
     Description: Management VPC
     Type: AWS::EC2::VPC::Id
 
   pMgmtAppPrivateSubnetA:
     Description: Render Scheduler Subnet A
-    Type: AWS::EC2::Subnet::Id
-
-  pMgmtAppPrivateSubnetB:
-    Description: Render Scheduler Subnet B
     Type: AWS::EC2::Subnet::Id
 
   pDeadlineRepoInstanceType:
@@ -74,7 +59,7 @@ Resources:
       VpcId: !Ref pManagementVPC
       Tags:
         - Key: Name
-          Value: vfx-Deadline-repo-sg
+          Value: vfx-deadline-repo-sg
         - Key: Environment
           Value: !Ref pEnvironment
 
@@ -116,29 +101,225 @@ Resources:
           packages:
             yum:
               jq: []
-              awslogs: []
+              awscli: []
               samba: []
           files:
-            /etc/awslogs/awslogs.conf:
+            /etc/cfn/cfn-hup.conf:
               content: !Sub |
-                [general]
-                state_file = /var/lib/awslogs/agent-state
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource rDeadlineRepoEC2Instance
+                runas=root
+            /etc/udev/rules.d/75-ec2-nvme-devices.rules:
+              content: |
+                # Copyright (C) 2006-2016 Amazon.com, Inc. or its affiliates.
+                # All Rights Reserved.
+                #
+                # Licensed under the Apache License, Version 2.0 (the "License").
+                # You may not use this file except in compliance with the License.
+                # A copy of the License is located at
+                #
+                #    http://aws.amazon.com/apache2.0/
+                #
+                # or in the "license" file accompanying this file. This file is
+                # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+                # OF ANY KIND, either express or implied. See the License for the
+                # specific language governing permissions and limitations under the
+                # License.
 
-                [/var/log/messages]
-                file = /var/log/messages
-                log_group_name = ${rDeadlineRepoLogGroup}
-                log_stream_name = %INSTANCE_ID/var/log/messages
-                datetime_format = %b %d %H:%M:%S
-                initial_position = start_of_file
-            /tmp/awslog_init.sh:
-              content: !Sub |
-                #!/bin/bash -xe
-                INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
-                sed -i "s|%INSTANCE_ID|$INSTANCE_ID|g" /etc/awslogs/awslogs.conf
-                sed -i -e "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
-                systemctl enable awslogsd.service
-                systemctl start awslogsd.service
-              mode: '755'
+                #nvme-ns-* devices
+                KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTRS{serial}=="?*", ATTRS{model}=="?*", SYMLINK+="disk/by-id/nvme-$attr{model}_$attr{serial}-ns-%n", OPTIONS+="string_escape=replace"
+
+                #nvme partitions
+                KERNEL=="nvme[0-9]*n[0-9]*p[0-9]*", ENV{DEVTYPE}=="partition", ATTRS{serial}=="?*", ATTRS{model}=="?*",  IMPORT{program}="ec2nvme-nsid %k"
+                KERNEL=="nvme[0-9]*n[0-9]*p[0-9]*", ENV{DEVTYPE}=="partition", ATTRS{serial}=="?*", ATTRS{model}=="?*",  ENV{_NS_ID}=="?*", SYMLINK+="disk/by-id/nvme-$attr{model}_$attr{serial}-ns-$env{_NS_ID}-part%n", OPTIONS+="string_escape=replace"
+
+                # ebs nvme devices
+                KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTRS{model}=="Amazon Elastic Block Store", PROGRAM="/sbin/ebsnvme-id -u /dev/%k", SYMLINK+="%c"
+              mode: '0644'
+            /sbin/ebsnvme-id:
+              content: |
+                #!/usr/bin/env python2.7
+
+                # Copyright (C) 2017 Amazon.com, Inc. or its affiliates.
+                # All Rights Reserved.
+                #
+                # Licensed under the Apache License, Version 2.0 (the "License").
+                # You may not use this file except in compliance with the License.
+                # A copy of the License is located at
+                #
+                #    http://aws.amazon.com/apache2.0/
+                #
+                # or in the "license" file accompanying this file. This file is
+                # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+                # OF ANY KIND, either express or implied. See the License for the
+                # specific language governing permissions and limitations under the
+                # License.
+
+                """
+                Usage:
+                Read EBS device information and provide information about
+                the volume.
+                """
+
+                import argparse
+                from ctypes import *
+                from fcntl import ioctl
+                import sys
+
+                NVME_ADMIN_IDENTIFY = 0x06
+                NVME_IOCTL_ADMIN_CMD = 0xC0484E41
+                AMZN_NVME_VID = 0x1D0F
+                AMZN_NVME_EBS_MN = "Amazon Elastic Block Store"
+
+                class nvme_admin_command(Structure):
+                    _pack_ = 1
+                    _fields_ = [("opcode", c_uint8),      # op code
+                                ("flags", c_uint8),       # fused operation
+                                ("cid", c_uint16),        # command id
+                                ("nsid", c_uint32),       # namespace id
+                                ("reserved0", c_uint64),
+                                ("mptr", c_uint64),       # metadata pointer
+                                ("addr", c_uint64),       # data pointer
+                                ("mlen", c_uint32),       # metadata length
+                                ("alen", c_uint32),       # data length
+                                ("cdw10", c_uint32),
+                                ("cdw11", c_uint32),
+                                ("cdw12", c_uint32),
+                                ("cdw13", c_uint32),
+                                ("cdw14", c_uint32),
+                                ("cdw15", c_uint32),
+                                ("reserved1", c_uint64)]
+
+                class nvme_identify_controller_amzn_vs(Structure):
+                    _pack_ = 1
+                    _fields_ = [("bdev", c_char * 32),  # block device name
+                                ("reserved0", c_char * (1024 - 32))]
+
+                class nvme_identify_controller_psd(Structure):
+                    _pack_ = 1
+                    _fields_ = [("mp", c_uint16),       # maximum power
+                                ("reserved0", c_uint16),
+                                ("enlat", c_uint32),     # entry latency
+                                ("exlat", c_uint32),     # exit latency
+                                ("rrt", c_uint8),       # relative read throughput
+                                ("rrl", c_uint8),       # relative read latency
+                                ("rwt", c_uint8),       # relative write throughput
+                                ("rwl", c_uint8),       # relative write latency
+                                ("reserved1", c_char * 16)]
+
+                class nvme_identify_controller(Structure):
+                    _pack_ = 1
+                    _fields_ = [("vid", c_uint16),          # PCI Vendor ID
+                                ("ssvid", c_uint16),        # PCI Subsystem Vendor ID
+                                ("sn", c_char * 20),        # Serial Number
+                                ("mn", c_char * 40),        # Module Number
+                                ("fr", c_char * 8),         # Firmware Revision
+                                ("rab", c_uint8),           # Recommend Arbitration Burst
+                                ("ieee", c_uint8 * 3),      # IEEE OUI Identifier
+                                ("mic", c_uint8),           # Multi-Interface Capabilities
+                                ("mdts", c_uint8),          # Maximum Data Transfer Size
+                                ("reserved0", c_uint8 * (256 - 78)),
+                                ("oacs", c_uint16),         # Optional Admin Command Support
+                                ("acl", c_uint8),           # Abort Command Limit
+                                ("aerl", c_uint8),          # Asynchronous Event Request Limit
+                                ("frmw", c_uint8),          # Firmware Updates
+                                ("lpa", c_uint8),           # Log Page Attributes
+                                ("elpe", c_uint8),          # Error Log Page Entries
+                                ("npss", c_uint8),          # Number of Power States Support
+                                ("avscc", c_uint8),         # Admin Vendor Specific Command Configuration
+                                ("reserved1", c_uint8 * (512 - 265)),
+                                ("sqes", c_uint8),          # Submission Queue Entry Size
+                                ("cqes", c_uint8),          # Completion Queue Entry Size
+                                ("reserved2", c_uint16),
+                                ("nn", c_uint32),            # Number of Namespaces
+                                ("oncs", c_uint16),         # Optional NVM Command Support
+                                ("fuses", c_uint16),        # Fused Operation Support
+                                ("fna", c_uint8),           # Format NVM Attributes
+                                ("vwc", c_uint8),           # Volatile Write Cache
+                                ("awun", c_uint16),         # Atomic Write Unit Normal
+                                ("awupf", c_uint16),        # Atomic Write Unit Power Fail
+                                ("nvscc", c_uint8),         # NVM Vendor Specific Command Configuration
+                                ("reserved3", c_uint8 * (704 - 531)),
+                                ("reserved4", c_uint8 * (2048 - 704)),
+                                ("psd", nvme_identify_controller_psd * 32),     # Power State Descriptor
+                                ("vs", nvme_identify_controller_amzn_vs)]  # Vendor Specific
+
+                class ebs_nvme_device:
+                    def __init__(self, device):
+                        self.device = device
+                        self.ctrl_identify()
+
+                    def _nvme_ioctl(self, id_response, id_len):
+                        admin_cmd = nvme_admin_command(opcode = NVME_ADMIN_IDENTIFY,
+                                                       addr = id_response,
+                                                       alen = id_len,
+                                                       cdw10 = 1)
+
+                        with open(self.device, "rw") as nvme:
+                            ioctl(nvme, NVME_IOCTL_ADMIN_CMD, admin_cmd)
+
+                    def ctrl_identify(self):
+                        self.id_ctrl = nvme_identify_controller()
+                        self._nvme_ioctl(addressof(self.id_ctrl), sizeof(self.id_ctrl))
+
+                        if self.id_ctrl.vid != AMZN_NVME_VID or self.id_ctrl.mn.strip() != AMZN_NVME_EBS_MN:
+                            raise TypeError("[ERROR] Not an EBS device: '{0}'".format(self.device))
+
+                    def get_volume_id(self):
+                        vol = self.id_ctrl.sn
+
+                        if vol.startswith("vol") and vol[3] != "-":
+                            vol = "vol-" + vol[3:]
+
+                        return vol
+
+                    def get_block_device(self, stripped=False):
+                        dev = self.id_ctrl.vs.bdev.strip()
+
+                        if stripped and dev.startswith("/dev/"):
+                            dev = dev[5:]
+
+                        return dev
+
+                if __name__ == "__main__":
+                    parser = argparse.ArgumentParser(description="Reads EBS information from NVMe devices.")
+                    parser.add_argument("device", nargs=1, help="Device to query")
+
+                    display = parser.add_argument_group("Display Options")
+                    display.add_argument("-v", "--volume", action="store_true",
+                            help="Return volume-id")
+                    display.add_argument("-b", "--block-dev", action="store_true",
+                            help="Return block device mapping")
+                    display.add_argument("-u", "--udev", action="store_true",
+                            help="Output data in format suitable for udev rules")
+
+                    if len(sys.argv) < 2:
+                        parser.print_help()
+                        sys.exit(1)
+
+                    args = parser.parse_args()
+
+                    get_all = not (args.udev or args.volume or args.block_dev)
+
+                    try:
+                        dev = ebs_nvme_device(args.device[0])
+                    except (IOError, TypeError) as err:
+                        print >> sys.stderr, err
+                        sys.exit(1)
+
+                    if get_all or args.volume:
+                        print "Volume ID: {0}".format(dev.get_volume_id())
+                    if get_all or args.block_dev or args.udev:
+                        print dev.get_block_device(args.udev)
+              mode: '0755'
             /etc/samba/smb.conf:
               content: |
                 [global]
@@ -160,42 +341,32 @@ Resources:
                         force create mode = 0700
                         force directory mode = 0700
                         unix extensions = No
-              mode: '755'
+              mode: '0755'
           commands:
-            01_wait_for_disk:
+            01_check_data:
               command: |
-                #!/bin/bash -xe
-                # By using the readlink command, this script will work on both, NVMe based instances types and on older instance types
-                while [[ ! -b $(readlink -f /dev/xvdh) ]]; do
-                    echo "waiting for the disk to appear..">&2
-                    sleep 5
+                while [ ! -e /dev/xvdh ]; do
+                  udevadm trigger -y '*nvme*'
+                  sleep 5
                 done
             02_format_disk:
-              command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
-            03_label_disk:
-              command: e2label $(readlink -f /dev/xvdh) wmq-data
-            04_mkdir:
-              command: mkdir -p /data/Thinkbox
-            05_mount_disk:
-              command: |
-                # generate the fstab entry
-                grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
-
-                # Remove all the old-style mount entries in /etc/fstab
-                sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
-
-                # mount the disk
-                grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
-            06_awslogs:
-              command: /tmp/awslog_init.sh
-            07_mkdir:
+              command: mkfs -t ext4 /dev/xvdh
+            03_mkdir_data:
+              command: mkdir -p /data
+            04_mount:
+              command: mount /dev/xvdh /data
+            05_fstab:
+              command: echo "/dev/xvdh /data ext4 defaults,nofail 0 2" >> /etc/fstab
+            06_mkdir_downloads:
               command: mkdir -p /data/downloads
-            08_copy_Deadline_files_from_s3:
+            07_copy_Deadline_files_from_s3:
               command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
-            09_mkdir:
+            08_mkdir_install:
               command: mkdir -p /data/install
-            10_untar:
+            09_untar:
               command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+            10_mkdir_Thinkbox:
+              command: mkdir -p /data/Thinkbox
             11_install:
               command: ls /data/install | grep DeadlineRepository |
                 (read repo; /data/install/$repo
@@ -216,6 +387,11 @@ Resources:
               command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a Deadlineuser
             17_samba_service:
               command: systemctl enable smb.service && systemctl restart smb.service
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
       BlockDeviceMappings:
         - DeviceName: /dev/xvdh
@@ -231,18 +407,31 @@ Resources:
       SubnetId: !Ref pMgmtAppPrivateSubnetA
       Tags:
         - Key: Name
-          Value: vfx-Deadline-repository
+          Value: vfx-deadline-repository
         - Key: Environment
           Value: !Ref pEnvironment
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
-          yum update --security -y
-          yum update aws-cfn-bootstrap -y
+          yum update -y
+          yum install -y epel-release
+          yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+          yum install -y pystache python-daemon
+
+          sudo systemctl enable amazon-ssm-agent
+          sudo systemctl start amazon-ssm-agent
+
+          /usr/bin/easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/lib/python2*/site-packages/aws_cfn_bootstrap*/init/redhat/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
 
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineRepoEC2Instance --region ${AWS::Region}
           # Signal the status from cfn-init
           /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource rDeadlineRepoEC2Instance --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: "PT15M"
 
 Outputs:
   rDeadlineRepoSecurityGroup:
