@@ -134,7 +134,7 @@ Resources:
       GroupDescription: Render client security group
       Tags:
         - Key: Name
-          Value: vfx-Deadline-rendernode-sg
+          Value: vfx-deadline-rendernode-sg
         - Key: Environment
           Value: !Ref pEnvironment
 
@@ -142,7 +142,7 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref pDeadlineRepoSecurityGroup
-      Description: Deadline-rendernode-sg
+      Description: vfx-deadline-rendernode-sg
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
 
@@ -159,7 +159,7 @@ Resources:
           SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
       Tags:
         - Key: Name
-          Value: vfx-Deadline-efs-sg
+          Value: vfx-deadline-efs-sg
         - Key: Environment
           Value: !Ref pEnvironment
 
@@ -171,7 +171,7 @@ Resources:
       PerformanceMode: generalPurpose
       FileSystemTags:
         - Key: Name
-          Value: vfx-Deadline-fs
+          Value: vfx-deadline-fs
         - Key: Project
           Value: !Ref pProjectName
 
@@ -273,7 +273,7 @@ Resources:
                     sleep 30s
                   fi
                 done
-              mode: '755'
+              mode: '0755'
             /etc/awslogs/awslogs.conf:
               content: !Sub |
                 [general]
@@ -293,45 +293,42 @@ Resources:
                 sed -i -e "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
                 systemctl enable awslogsd.service
                 systemctl start awslogsd.service
-              mode: '755'
+              mode: '0755'
           commands:
-            01_format_disk:
-              command: blkid $(readlink -f /dev/xvdh) || mkfs -t ext4 $(readlink -f /dev/xvdh)
-            02_label_disk:
-              command: e2label $(readlink -f /dev/xvdh) wmq-data
+            01_check_data:
+              command: |
+                while [ ! -e /dev/xvdh ]; do
+                  udevadm trigger -y '*nvme*'
+                  sleep 5
+                done
+            02_format_disk:
+              command: mkfs -t ext4 /dev/xvdh
             03_mkdir_data:
               command: mkdir -p /data
-            04_mount_disk:
-              command: |
-                # generate the fstab entry
-                grep -q ^LABEL=wmq-data /etc/fstab || echo "LABEL=wmq-data /data ext4 defaults" >> /etc/fstab
-
-                # Remove all the old-style mount entries in /etc/fstab
-                sed  -e '/^[\/][^ \t]*[ \t]*\/data[ \t]/d' /etc/fstab
-
-                # mount the disk
-                grep -q "$(readlink -f /dev/xvdh) /data" /proc/mounts || mount /data
-
-            05_mkdir_repo:
+            04_mount:
+              command: mount /dev/xvdh /data
+            05_fstab:
+              command: echo "/dev/xvdh /data ext4 defaults,nofail 0 2" >> /etc/fstab
+            06_mkdir_downloads:
+              command: mkdir -p /data/downloads
+            07_copy_Deadline_files_from_s3:
+              command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
+            08_mkdir_install:
+              command: mkdir -p /data/install
+            09_untar:
+              command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+            10_mkdir_DeadlineRepository:
               command: mkdir -p /data/DeadlineRepository
-            06_mount_Deadline_repo:
+            11_mount_DeadlineRepository:
               command: !Sub |
                 # create fstab entry for Deadline repository
                 echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=Deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
 
                 # mount the Deadline repository
                 mount -a
-            07_mkdir_downloads:
-              command: mkdir -p /data/downloads
-            08_copy_Deadline_files_from_s3:
-              command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
-            09_mkdir_install:
-              command: mkdir -p /data/install
-            10_untar:
-              command: ls /data/downloads | grep Deadline.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
-            11_mkdir_thinkbox:
+            12_mkdir_Thinkbox:
               command: mkdir -p /data/Thinkbox
-            12_install:
+            13_install:
               command: ls /data/install | grep DeadlineClient |
                 (read repo; /data/install/$repo
                 --mode unattended
@@ -344,24 +341,23 @@ Resources:
                 --slavestartup true
                 --daemonuser ""
                 --launcherdaemon true)
-            13_wait_for_dns_propogation:
+            14_wait_for_dns_propogation:
               command: /tmp/dns.sh
-            14_mount_efs:
+            15_mount_efs:
               command: !Sub |
                 #!/bin/bash -xe
                 EFS_DIRECTORY=/mnt/efs
                 mkdir $EFS_DIRECTORY
                 echo "${rDeadlineRenderNodeEfs}:/ $EFS_DIRECTORY efs _netdev" >> /etc/fstab
                 mount -a -t efs defaults
-            15_awslogs:
+            16_awslogs:
               command: /tmp/awslog_init.sh
-
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
           - DeviceName: /dev/xvdh
             Ebs:
-              VolumeSize: 40
+              VolumeSize: 20
               VolumeType: gp2
               Encrypted: true
         ImageId: !Ref pDeadlineRenderNodeAmi
@@ -373,7 +369,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: vfx-Deadline-rendernode
+                Value: vfx-deadline-rendernode
               - Key: Environment
                 Value: !Ref pEnvironment
               - Key: Project
