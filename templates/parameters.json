@@ -4,12 +4,8 @@
         "ParameterValue": "eu-west-1a, eu-west-1b"
     },
     {
-        "ParameterKey": "pDeadlineRenderNodeTargetCapacity",
-        "ParameterValue": "2"
-    },
-    {
-        "ParameterKey": "pDeadlineRepoInstanceType",
-        "ParameterValue": "m5.xlarge"
+        "ParameterKey": "pBastionRDPCIDR",
+        "ParameterValue": "90.248.199.102/32"
     },
     {
         "ParameterKey": "pNotifyEmail",
@@ -18,5 +14,9 @@
     {
         "ParameterKey": "pDeadlineRepositorySambaPassword",
         "ParameterValue": "MyTempPassword123"
+    },
+    {
+        "ParameterKey": "pDeadlineUserPassword",
+        "ParameterValue": "RgQlhU1gSufh"
     }
 ]

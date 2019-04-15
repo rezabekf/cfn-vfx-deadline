@@ -26,16 +26,19 @@ Metadata:
           - pMgmtAppPrivateSubnetBCIDR
 
       - Label:
-          default: Render farm instance configuration
+          default: Deadline repository configuration
+        Parameters:
+          - pDeadlineRepoInstanceType
+
+      - Label:
+          default: Deadline render node configuration
         Parameters:
           - pDeadlineRenderNodeTargetCapacity
 
       - Label:
-          default: Render scheduler configuration
+          default: Deadline workstation configuration
         Parameters:
-          - pDeadlineRepoInstanceType
-          - pDeadlineRepoDesiredCapacity
-          - pDeadlineRepoMaxCapacity
+          - pDeadlineWorkstationInstanceType
 
       - Label:
           default: Email and environment configuration
@@ -161,29 +164,38 @@ Parameters:
     Description: The CIDR block for the private subnet located in Availability Zone 2 of the management VPC.
     Type: String
 
+  pBastionRDPCIDR:
+    Description: The CIDR Allowed RDP access to the bastion host
+    Default: 0.0.0.0/0
+    Type: String
+
+  pBastionInstanceType:
+    Default: m5.large
+    Description: Instance type for Bastion server
+    Type: String
+
   pDeadlineRenderNodeTargetCapacity:
-    Default: 1
+    Default: 2
     Description: The number of instances in the Spot Fleet.
     Type: String
 
   pDeadlineRepoInstanceType:
-    Default: t2.micro
+    Default: m5.xlarge
     Description: The EC2 instance type for the Deadline repository.
     Type: String
 
-  pDeadlineRepoDesiredCapacity:
-    Default: 1
-    Description: The number of render scheduler instances that you want to run in the Auto Scaling group.
-      This number must be less than or equal to the maximum capacity you specify in the following parameter.
-    Type: String
-
-  pDeadlineRepoMaxCapacity:
-    Default: 1
-    Description: The maximum number of render scheduler instances that you can run in the Auto Scaling group.
+  pDeadlineWorkstationInstanceType:
+    Default: m5.large
+    Description: The EC2 instance type for the Deadline workstation.
     Type: String
 
   pDeadlineRepositorySambaPassword:
     Description: Password for Samba
+    Type: String
+    NoEcho: true
+
+  pDeadlineUserPassword:
+    Description: Password for deadlineuser RDP connection
     Type: String
     NoEcho: true
 
@@ -277,6 +289,7 @@ Mappings:
     eu-west-1:
       AMZNLINUX2AMI: ami-02a39bdb8e8ee056a
       UBUNTU18AMI: ami-0204cddbf060b2420
+      CENTOS7AMI: ami-0ff760d16d9497662
     ap-northeast-2:
       AMZNLINUX2AMI: ami-045e355a6004a67c4
     ap-northeast-1:
@@ -391,15 +404,10 @@ Resources:
         !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_repository/repository.template
       TimeoutInMinutes: 30
       Parameters:
-        pAvailabilityZones:
-          Fn::Join:
-            - ','
-            - !Ref pAvailabilityZones
         pManagementVPC: !GetAtt ManagementVpcTemplate.Outputs.rVPCManagement
         pMgmtAppPrivateSubnetA: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetA
-        pMgmtAppPrivateSubnetB: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetB
         pDeadlineRepoInstanceType: !Ref pDeadlineRepoInstanceType
-        pDeadlineRepoAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
+        pDeadlineRepoAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', CENTOS7AMI]
         pDeadlineArtifacts: !Ref QSS3BucketName
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
         pEnvironment: !Ref pEnvironment
@@ -429,6 +437,24 @@ Resources:
         pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
         pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+
+  DeadlineWorkstationTemplate:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_client/workstation.template
+      TimeoutInMinutes: 30
+      Parameters:
+        pManagementVPC: !GetAtt ManagementVpcTemplate.Outputs.rVPCManagement
+        pMgmtAppPrivateSubnetA: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetA
+        pDeadlineWorkstationInstanceType: !Ref pDeadlineWorkstationInstanceType
+        pDeadlineWorkstationAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', CENTOS7AMI]
+        pDeadlineArtifacts: !Ref QSS3BucketName
+        pDeadlineRepoSecurityGroup: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoSecurityGroup
+        pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
+        pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
+        pDeadlineUserPassword: !Ref pDeadlineUserPassword
         pEnvironment: !Ref pEnvironment
 
 Outputs:
