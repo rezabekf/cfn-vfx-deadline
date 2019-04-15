@@ -1,4 +1,4 @@
 [submodule "submodules/quickstart-vfx-ise"]
 	path = submodules/quickstart-vfx-ise
-	url = git@github.com:aws-quickstart/quickstart-vfx-ise.git
+	url = https://github.com/aws-quickstart/quickstart-vfx-ise.git
 	branch = master
