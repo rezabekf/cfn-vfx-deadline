@@ -389,8 +389,6 @@ Resources:
                 systemctl enable smb.service
                 systemctl restart smb.service
 
-              # Allow the SELinux for the samba configuration
-              # chcon -t samba_share_t /data/Thinkbox/
           services:
             sysvinit:
               cfn-hup:

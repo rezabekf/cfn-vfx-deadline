@@ -50,11 +50,6 @@ Parameters:
     Type: String
     NoEcho: true
 
-  pDeadlineUserPassword:
-    Description: Password for deadlineuser RDP connection
-    Type: String
-    NoEcho: true
-
   pEnvironment:
     AllowedValues:
       - DEV
@@ -402,11 +397,6 @@ Resources:
               command: |
                 # Load GUI by default on reboot and change to GUI immediately
                 systemctl set-default graphical.target
-            16_rdp_user:
-              command: !Sub |
-                useradd deadlineuser
-                echo 'deadlineuser:${pDeadlineUserPassword}' | chpasswd
-                usermod -aG wheel deadlineuser
           services:
             sysvinit:
               cfn-hup:
