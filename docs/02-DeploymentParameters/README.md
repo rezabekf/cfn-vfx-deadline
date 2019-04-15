@@ -1,0 +1,2 @@
+- fill in parameters overview
+- next [Set up AWS Client VPN](../../docs/03-SetupAWSClientVPN/README.md)

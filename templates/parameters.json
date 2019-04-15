@@ -4,19 +4,11 @@
         "ParameterValue": "eu-west-1a, eu-west-1b"
     },
     {
-        "ParameterKey": "pBastionRDPCIDR",
-        "ParameterValue": "90.248.199.102/32"
-    },
-    {
         "ParameterKey": "pNotifyEmail",
         "ParameterValue": "email@example.com"
     },
     {
         "ParameterKey": "pDeadlineRepositorySambaPassword",
         "ParameterValue": "MyTempPassword123"
-    },
-    {
-        "ParameterKey": "pDeadlineUserPassword",
-        "ParameterValue": "RgQlhU1gSufh"
     }
 ]

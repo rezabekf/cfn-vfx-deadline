@@ -164,16 +164,6 @@ Parameters:
     Description: The CIDR block for the private subnet located in Availability Zone 2 of the management VPC.
     Type: String
 
-  pBastionRDPCIDR:
-    Description: The CIDR Allowed RDP access to the bastion host
-    Default: 0.0.0.0/0
-    Type: String
-
-  pBastionInstanceType:
-    Default: m5.large
-    Description: Instance type for Bastion server
-    Type: String
-
   pDeadlineRenderNodeTargetCapacity:
     Default: 2
     Description: The number of instances in the Spot Fleet.
@@ -191,11 +181,6 @@ Parameters:
 
   pDeadlineRepositorySambaPassword:
     Description: Password for Samba
-    Type: String
-    NoEcho: true
-
-  pDeadlineUserPassword:
-    Description: Password for deadlineuser RDP connection
     Type: String
     NoEcho: true
 
@@ -454,7 +439,6 @@ Resources:
         pDeadlineRepoSecurityGroup: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoSecurityGroup
         pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
-        pDeadlineUserPassword: !Ref pDeadlineUserPassword
         pEnvironment: !Ref pEnvironment
 
 Outputs:

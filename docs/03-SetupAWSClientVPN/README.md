@@ -1,0 +1,2 @@
+- follow instructions [How to set up AWS Client VPN](https://aws.amazon.com/blogs/networking-and-content-delivery/introducing-aws-client-vpn-to-securely-access-aws-and-on-premises-resources/)
+- next [Set up Client](../../docs/04-SetupClientVPN/README.md)
