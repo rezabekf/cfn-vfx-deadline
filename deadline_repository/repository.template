@@ -102,7 +102,6 @@ Resources:
             yum:
               jq: []
               awscli: []
-              samba: []
           files:
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
@@ -376,17 +375,22 @@ Resources:
                 --mongodir "/data/Thinkbox/DeadlineDatabase10"
                 --requireSSL false)
             12_user:
-              command: useradd Deadlineuser
+              command: useradd deadlineuser
             13_repo_owner:
-              command: chown -R Deadlineuser:nobody /data/Thinkbox/DeadlineRepository10
+              command: chown -R deadlineuser:nobody /data/Thinkbox/DeadlineRepository10
             14_repo_permissions:
               command: chmod -R 500 /data/Thinkbox/DeadlineRepository10
             15_repo_full_permissions:
               command: cd /data/Thinkbox/DeadlineRepository10 && chmod -R 700 jobs/ jobsArchived/ reports/
             16_samba_user:
-              command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a Deadlineuser
+              command: !Sub echo ${pDeadlineRepositorySambaPassword} | tee - | smbpasswd -s -a deadlineuser
             17_samba_service:
-              command: systemctl enable smb.service && systemctl restart smb.service
+              command: |
+                systemctl enable smb.service
+                systemctl restart smb.service
+
+              # Allow the SELinux for the samba configuration
+              # chcon -t samba_share_t /data/Thinkbox/
           services:
             sysvinit:
               cfn-hup:
@@ -417,9 +421,13 @@ Resources:
           yum install -y epel-release
           yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
           yum install -y pystache python-daemon
+          yum install -y samba samba-client samba-common
 
           sudo systemctl enable amazon-ssm-agent
           sudo systemctl start amazon-ssm-agent
+
+          sed -i 's/enforcing/disabled/g' /etc/selinux/config /etc/selinux/config
+          sudo setenforce 0
 
           /usr/bin/easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
           cp -v /usr/lib/python2*/site-packages/aws_cfn_bootstrap*/init/redhat/cfn-hup /etc/init.d
