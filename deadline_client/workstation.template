@@ -50,6 +50,11 @@ Parameters:
     Type: String
     NoEcho: true
 
+  pDeadlineUserPassword:
+    Description: Password for deadlineuser RDP connection
+    Type: String
+    NoEcho: true
+
   pEnvironment:
     AllowedValues:
       - DEV
@@ -395,8 +400,13 @@ Resources:
                 chcon --type=bin_t /usr/sbin/xrdp-sesman
             15_gnome_conf:
               command: |
-                # Load GUI by default on reboot and change to GUI immediately
+                # Load GUI by default on reboot
                 systemctl set-default graphical.target
+            16_rdp_user:
+              command: !Sub |
+                useradd deadlineuser
+                echo 'deadlineuser:${pDeadlineUserPassword}' | chpasswd
+                usermod -aG wheel deadlineuser
           services:
             sysvinit:
               cfn-hup:
