@@ -26,14 +26,14 @@ Metadata:
           - pMgmtAppPrivateSubnetBCIDR
 
       - Label:
-          default: Deadline repository configuration
-        Parameters:
-          - pDeadlineRepoInstanceType
-
-      - Label:
           default: Deadline render node configuration
         Parameters:
           - pDeadlineRenderNodeTargetCapacity
+
+      - Label:
+          default: Deadline repository configuration
+        Parameters:
+          - pDeadlineRepoInstanceType
 
       - Label:
           default: Deadline workstation configuration
@@ -85,7 +85,10 @@ Metadata:
         default: Capacity of Spot Fleet instances
 
       pDeadlineRepoInstanceType:
-        default: Render scheduler instance type
+        default: Deadline Repository instance type
+
+      pDeadlineWorkstationInstanceType:
+        default: Deadline Workstation instance type
 
       pProjectName:
         default: Project name
@@ -175,17 +178,17 @@ Parameters:
     Type: String
 
   pDeadlineWorkstationInstanceType:
-    Default: m5.large
+    Default: m5.xlarge
     Description: The EC2 instance type for the Deadline workstation.
     Type: String
 
   pDeadlineRepositorySambaPassword:
-    Description: Password for Samba
+    Description: Samba password for deadlineuser account used to connect to repository.
     Type: String
     NoEcho: true
 
   pDeadlineUserPassword:
-    Description: Password for deadlineuser RDP connection
+    Description: Password for deadlineuser account used for RDP connection.
     Type: String
     NoEcho: true
 
@@ -214,7 +217,7 @@ Parameters:
     AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-.]*[0-9a-zA-Z])*$
     ConstraintDescription: Quick Start bucket name can include numbers, lowercase letters, uppercase letters,
       periods (.), and hyphens (-). It cannot start or end with a hyphen (-).
-    Default: cfn-vfx-deadline
+    Default: MyBucketName
     Description: S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers,
       lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
     Type: String
@@ -223,7 +226,7 @@ Parameters:
     AllowedPattern: ^[0-9a-zA-Z-/]*$
     ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters, uppercase letters,
       hyphens (-), and forward slash (/).
-    Default: cfn-quickstart/
+    Default: cfn-vfx-deadline/
     Description: S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers,
       lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
     Type: String
