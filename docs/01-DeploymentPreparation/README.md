@@ -1,17 +1,33 @@
-- create s3 bucket e.g vfx-deadline-rezabekf
-- download linux installer from [ThinkBox web site](https://downloads.thinkboxsoftware.com)
-you need to login amazon.com account
-grab .tar installer
+## Deployment preparation
+Create a S3 bucket
+```
+aws s3 mb s3://${BUCKET_NAME}
+```
 
-mkdir MyFolder && cd MyFolder
+Download linux installer from [ThinkBox web site](https://downloads.thinkboxsoftware.com)
+Log in with your Amazon account and download Deadline-10.X.X.X-linux-installers.tar.
 
-git clone https://github.com/rezabekf/cfn-vfx-deadline.git
+Upload installer to S3 bucket:
+```
+aws cp ~/Downloads/Deadline-10.X.X.X-linux-installers.tar s3://${BUCKET_NAME}
+```
+
+Clone git hub repository and initialize submodules:
+```bash
+mkdir -p ~/Documents/vfx-deadline && cd ~/Documents/vfx-deadline
+git clone https://github.com/rezabekf/cfn-vfx-deadline.git && cd cfn-vfx-deadline
 git submodule init
 git submodule update
 
+```
 
+Upload the templates to S3 bucket:
+```
+aws s3 sync . s3://${BUCKET_NAME}/cfn-vfx-deadline
+```
 
-- upload files to S3
-aws s3 cp . s3://MyBucketName --recursive
+Navigate to to the link and click on "Continue to Subscribe" to official [CentOS 7 image in AWS marketplace](https://aws.amazon.com/marketplace/pp/B00O7WM7QW).
+Accept terms and conditions and wait for the subscription to complete.
 
-- next deploy [CloudFormation stack](../../docs/02-DeploymentParameters/README.md)
+This concludes the deployment preparation. 
+In the next step we will deploy [CloudFormation stack](../../docs/02-DeploymentParameters/README.md).
