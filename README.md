@@ -1,12 +1,10 @@
 # cfn-vfx-deadline
 
-This is a Cloud Formation template to deploy Deadline 10 management toolkit for render farms. The template will set-up Deadline Database and Repository,
-two render node clients and workstation on AWS.
+This is a CloudFormation template to deploy Deadline 10 management toolkit for VFX render farms. The template will set-up the Deadline Database and Repository, two render node clients and a workstation on AWS.
 
-The template will reuse [VFX Burst Rendering environment](https://github.com/aws-quickstart/quickstart-vfx-ise) to help VFX studios
-meet Independent Security Evaluators (ISE) standards and guidelines.
+The template will reuse [VFX Burst Rendering environment](https://github.com/aws-quickstart/quickstart-vfx-ise) to help VFX studios meet the Independent Security Evaluators (ISE) standards and guidelines.
 
-Below is a brief explanation of what we have generated for you:
+Below is a brief overview of the project structure:
 ```
 .
 ├── LICENSE
