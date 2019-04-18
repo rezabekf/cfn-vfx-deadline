@@ -124,7 +124,7 @@ In this tutorial, we add a route to the internet.
 2. In the navigation pane, choose **Client VPN Endpoints**.
 3. Select the Client VPN endpoint to which to add the route, choose **Route Table**, and then choose **Create Route**.
 4. For **Route destination**, enter `0.0.0.0/0`.
-5. For **Target VPC Subnet ID**, specify the ID of the `Management DMZ subnet` through which to route traffic.
+5. For **Target VPC Subnet ID**, specify the ID of the `Management DMZ subnet B` through which to route traffic.
 6. For **Description**, enter a brief description for the route.
 7. Choose **Create Route**.
 
