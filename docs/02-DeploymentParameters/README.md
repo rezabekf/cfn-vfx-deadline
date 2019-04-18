@@ -1,16 +1,16 @@
 ## Deployment parameters
 
-Go to https://console.aws.amazon.com/s3 and navigate to main template.
+Go to https://console.aws.amazon.com/s3 and navigate to the main template.
 
 `${BUCKET_NAME} -> cfn-vfx-deadline -> templates -> deadline-stack.template`
 
-On the Overview tab find and copy `Object URL`.
+On the Overview tab, find and copy `Object URL`.
 
 Go to https://console.aws.amazon.com/cloudformation and `Create stack`.
 
-In specify template section, paste in Amazon S3 URL you copied earlier.
+In the specify template section, paste in Amazon S3 URL you copied earlier.
 
-Bellow are Parameters for deploying CloudFormation template. Most of the parameters have default values, however there are some that `require input`. 
+Below are the parameters for deploying the CloudFormation template. Most of these parameters have default values, however, there are some that require input. 
 
 | Parameter label                      | Default           | Description                                                                                                                                                               |
 |--------------------------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -29,13 +29,13 @@ Bellow are Parameters for deploying CloudFormation template. Most of the paramet
 | Notification email address           | `Requires input`  | The email address that security event notifications should be sent to. You will receive a confirmation email at this address.                                             |
 | Project name                         | MyProject         | The project name to use for tagging render farm instances.                                                                                                                |
 | VFX environment                      | DEV               | The type of VFX environment to set up. You can specify DEV (development), TEST (test), or PROD (production).DEV                                                           |
-| Quick Start S3 bucket name           | `Requires input`  | S3 bucket name created in deployment preparation.                                                                                                                         |
-| Quick Start S3 key prefix            | cfn-vfx-deadline/ | S3 key prefix for repository assets.                                                                                                                                      |
+| Quick Start S3 bucket name           | `Requires input`  | The S3 bucket name created in deployment preparation.                                                                                                                         |
+| Quick Start S3 key prefix            | cfn-vfx-deadline/ | The S3 key prefix for repository assets.                                                                                                                                      |
 | pDeadlineRepositorySambaPassword     | `Requires input`  | Samba password for deadlineuser account used to connect to repository.                                                                                                    |
 | pDeadlineUserPassword                | `Requires input`  | Password for deadlineuser account used for RDP connection.                                                                                                                 |
 
 
-Once you are happy with the parameter values and required input parameters are filled in, you can create stack.
+Once you are happy with the parameter values and the required input parameters are filled in, you can create stack.
 
 In the next step, we will set up [AWS Client VPN](../../docs/03-SetupAWSClientVPN/README.md) to connect to Deadline
 Workstation via RDP.
