@@ -1,11 +1,11 @@
 ## Deployment preparation
-Create a S3 bucket
+Create a S3 bucket:
 ```
 aws s3 mb s3://${BUCKET_NAME}
 ```
 
-Download linux installer from [ThinkBox web site](https://downloads.thinkboxsoftware.com)
-Log in with your Amazon account and download Deadline-10.X.X.X-linux-installers.tar.
+Download linux installer from [ThinkBox web site](https://downloads.thinkboxsoftware.com).
+Log in with your Amazon account and download `Deadline-10.X.X.X-linux-installers.tar`.
 
 Upload installer to S3 bucket:
 ```

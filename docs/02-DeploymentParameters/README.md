@@ -4,9 +4,9 @@ Go to https://console.aws.amazon.com/s3 and navigate to main template.
 
 `${BUCKET_NAME} -> cfn-vfx-deadline -> templates -> deadline-stack.template`
 
-On the Overview tab find and copy `Object URL`
+On the Overview tab find and copy `Object URL`.
 
-Go to https://console.aws.amazon.com/cloudformation and `Create stack`
+Go to https://console.aws.amazon.com/cloudformation and `Create stack`.
 
 In specify template section, paste in Amazon S3 URL you copied earlier.
 
@@ -35,7 +35,7 @@ Bellow are Parameters for deploying CloudFormation template. Most of the paramet
 | pDeadlineUserPassword                | `Requires input`  | Password for deadlineuser account used for RDP connection.                                                                                                                 |
 
 
-Once you happy with the parameter values and required input parameters are filled in, you can create stack.
+Once you are happy with the parameter values and required input parameters are filled in, you can create stack.
 
 In the next step, we will set up [AWS Client VPN](../../docs/03-SetupAWSClientVPN/README.md) to connect to Deadline
 Workstation via RDP.
