@@ -34,3 +34,6 @@ Below is a brief explanation of what we have generated for you:
 ## Requirements
 * AWS CLI already configured with Administrator permission
 * Git installed
+
+## Deployment instructions
+[Deployment preparation](docs/01-DeploymentPreparation/README.md)
