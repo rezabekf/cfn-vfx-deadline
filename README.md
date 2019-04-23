@@ -21,7 +21,7 @@ Below is a brief overview of the project structure:
 │   │   └── README.md
 │   ├── 03-SetupAWSClientVPN
 │   │   └── README.md
-│   └── 04-SetupClientVPN
+│   └── 04-CleanUp
 │       └── README.md
 ├── submodules
 │   └── quickstart-vfx-ise
