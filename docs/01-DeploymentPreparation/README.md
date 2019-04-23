@@ -9,7 +9,7 @@ Log in with your Amazon account and download `Deadline-10.X.X.X-linux-installers
 
 Upload the installer to S3 bucket:
 ```
-aws cp ~/Downloads/Deadline-10.X.X.X-linux-installers.tar s3://${BUCKET_NAME}
+aws s3 cp ~/Downloads/Deadline-10.X.X.X-linux-installers.tar s3://${BUCKET_NAME}
 ```
 
 Clone the GitHub repository and initialize submodules:
