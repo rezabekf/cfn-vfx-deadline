@@ -36,10 +36,10 @@ cp pki/private/client1.domain.tld.key /custom_folder/
 cd /custom_folder/
 
 # 8. Upload the server certificate and key to ACM.
-aws acm import-certificate --certificate file://server.crt --private-key file://server.key --certificate-chain file://ca.crt --region region
+aws acm import-certificate --certificate file://server.crt --private-key file://server.key --certificate-chain file://ca.crt --region ${REGION}
 
 # 9. Upload the client certificate and key to ACM.
-aws acm import-certificate --certificate file://client1.domain.tld.crt --private-key file://client1.domain.tld.key --certificate-chain file://ca.crt --region region
+aws acm import-certificate --certificate file://client1.domain.tld.crt --private-key file://client1.domain.tld.key --certificate-chain file://ca.crt --region ${REGION}
 ```
 
 #### Step 2: Create a Client VPN Endpoint
