@@ -1,13 +1,13 @@
 ## Setup AWS Client VPN
 
 #### Step 1: Generate Server and Client Certificates and Keys
-This tutorial uses mutual authentication. With mutual authorization, Client VPN uses certificates to perform 
+This tutorial uses mutual authentication. With mutual authorization, the Client VPN uses certificates to perform 
 authentication between the client and the server.
 
-For the detailed steps to generate the server and client certificates and keys, go to
+For more detailed steps to generate the server and client certificates and keys, go to
 [Mutual Authentication](https://docs.aws.amazon.com/vpn/latest/clientvpn-admin/authentication-authrization.html#mutual).
 
-Below is a summary of commands:
+Below is a summary of the commands:
 ```bash
 # 1. Clone the OpenVPN easy-rsa repo to your local computer.
 git clone https://github.com/OpenVPN/easy-rsa.git
@@ -129,21 +129,20 @@ In this tutorial, we add a route to the internet.
 7. Choose **Create Route**.
 
 #### Step 6: Whitelist RDP in Deadline workstation security group
-To allow RDP connection to workstation instance, you must whitelist Client VPN endpoint security group in workstation security group.
+To allow RDP connection to the workstation instance, you must whitelist the Client VPN endpoint security group in workstation security group.
 
 1. Open the Amazon VPC console at <https://console.aws.amazon.com/vpc/>.
 2. In the navigation pane, choose **Client VPN Endpoints**.
-3. Select the Client VPN endpoint from which to copy security group ID, choose **Security Groups**, and then copy **sg-xxxxxxxxx** ID.
+3. Select the Client VPN endpoint from which to copy the security group ID, choose **Security Groups**, and then copy **sg-xxxxxxxxx** ID.
 
 5. In the navigation pane, choose **Security Groups**.
 6. Select the `vfx-deadline-workstation-sg` security group to which to add rule, choose **Inbound Rules**, and then choose **Edit rules**, **Add Rule**.
 7. For **Type**, select `RDP`.
-8. For **Source**, select `Custom` and paste in Client VPN security group ID.
+8. For **Source**, select `Custom` and paste in the Client VPN security group ID.
 9. Choose **Save rules**. 
 
 #### Step 7: Download the Client VPN Endpoint Configuration File
 
-In this step we download and prepare the Client VPN endpoint configuration file. 
 The configuration file includes the Client VPN endpoint and certificate information required to establish a VPN connection. 
 You must provide this file to the clients who need to connect to the Client VPN endpoint to establish a VPN connection. 
 The client uploads this file into their VPN client application.
@@ -154,7 +153,7 @@ The client uploads this file into their VPN client application.
     ```bash
     aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id `endpoint_id` --output text>client-config.ovpn
     ```  
-2. Copy the client certificate and key, which were generated in Step 1, to the same folder as the downloaded 
+2. Copy the client certificate and key (which were generated in Step 1) to the same folder as the downloaded 
 Client VPN endpoint configuration file. The client certificate and key can be found in the following locations in 
 the cloned OpenVPN easy-rsa repo:
     * Client certificate — `easy-rsa/easyrsa3/pki/issued/client1.domain.tld.crt`
