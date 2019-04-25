@@ -178,4 +178,23 @@ brew cask install tunnelblick
 Once the client is installed, please follow the 
 [AWS Connect to VPN documentation](https://docs.aws.amazon.com/vpn/latest/clientvpn-user/macos.html) 
 
+#### Step 9: Connect to Deadline workstation instance
+
+1. Install RDP client
+    - [Windows] Windows includes an RDP client by default.
+    - [Mac OS X] Download the Microsoft Remote Desktop app from the Mac App Store.
+    - [Linux] Use [rdesktop](http://www.rdesktop.org/).
+
+2. Get the Private IPv4 of the instance
+    You can get the Private IPv4 for your instance using the Amazon EC2 console.
+    Select the `vfx-deadline-workstation` and look for `Private IPs` in instance description tab.
+    
+3. RDP to the instance
+    - Before making connection, ensure that VPN client is connected to the AWS Client Endpoint. If not, follow 
+      instructions in step 8.
+    - For **PC name**, use Private IPv4 address.
+    - For **User name**, use `deadlineuser`.
+    - For **Password**, use password you have created when launching CloudFormation stack (pDeadlineUserPassword).
+    - You can now connect to the instance. 
+    
 In the last Section of this guide we will [Cleanup](../04-CleanUp/README.md) all the resources created.

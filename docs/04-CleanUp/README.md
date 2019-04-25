@@ -1,7 +1,5 @@
 ## Cleanup
 
-Work in progress...
-
 - Disassociate both subnets from Client VPN EndPoint
 - Delete Client VPN EndPoint
 - Delete Nested CloudFormation stack
