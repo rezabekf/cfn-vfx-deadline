@@ -60,12 +60,20 @@ Parameters:
     Description: S3 bucket name with Deadline Artifacts
     Type: String
 
+  pLicenseServerSecurityGroup:
+    Description: License server security group
+    Type: AWS::EC2::SecurityGroup::Id
+
+  pDeadlineLicenseServerPrivateIp:
+    Description: Private IP of License server
+    Type: String
+
   pDeadlineRepoSecurityGroup:
     Description: Deadline repo security group
     Type: AWS::EC2::SecurityGroup::Id
 
   pDeadlineRepositoryPrivateIp:
-    Description: Privat IP of Deadline repository imstance
+    Description: Privat IP of Deadline repository instance
     Type: String
 
   pDeadlineRepositorySambaPassword:
@@ -138,7 +146,15 @@ Resources:
         - Key: Environment
           Value: !Ref pEnvironment
 
-  rDeadlineRenderNodeToDedlineRepoIngress:
+  rDeadlineRenderNodeToLicenseServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref pLicenseServerSecurityGroup
+      Description: vfx-deadline-rendernode-sg
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref rDeadlineRenderNodeSecurityGroup
+
+  rDeadlineRenderNodeToDeadlineRepoIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref pDeadlineRepoSecurityGroup
@@ -329,17 +345,19 @@ Resources:
             12_mkdir_Thinkbox:
               command: mkdir -p /data/Thinkbox
             13_install:
-              command: ls /data/install | grep DeadlineClient |
-                (read repo; /data/install/$repo
-                --mode unattended
-                --prefix "/data/Thinkbox/Deadline10"
-                --connectiontype Repository
-                --repositorydir "/data/DeadlineRepository"
-                --noguimode true
-                --licensemode LicenseFree
-                --launcherstartup true
-                --slavestartup true
-                --daemonuser ""
+              command: !Sub |
+                ls /data/install | grep DeadlineClient | \
+                (read repo; /data/install/$repo \
+                --mode unattended \
+                --prefix "/data/Thinkbox/Deadline10" \
+                --connectiontype Repository \
+                --repositorydir "/data/DeadlineRepository" \
+                --noguimode true \
+                --licensemode Standard \
+                --licenseserver @${pDeadlineLicenseServerPrivateIp} \
+                --launcherstartup true \
+                --slavestartup true \
+                --daemonuser "" \
                 --launcherdaemon true)
             14_wait_for_dns_propogation:
               command: /tmp/dns.sh
