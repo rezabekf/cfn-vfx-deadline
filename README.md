@@ -12,6 +12,8 @@ Below is a brief overview of the project structure:
 ├── deadline_client
 │   ├── render_node.template
 │   └── workstation.template
+├── deadline_license_server
+│   └── license_server.template
 ├── deadline_repository
 │   └── repository.template
 ├── docs
@@ -26,7 +28,8 @@ Below is a brief overview of the project structure:
 ├── submodules
 │   └── quickstart-vfx-ise
 └── templates
-    ├── deadline-stack.template
+    └── deadline-stack.template
+
 ```
 
 ## Requirements
