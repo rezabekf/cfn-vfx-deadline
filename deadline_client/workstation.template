@@ -45,6 +45,14 @@ Parameters:
     Description: Privat IP of Deadline repository imstance
     Type: String
 
+  pLicenseServerSecurityGroup:
+    Description: License server security group
+    Type: AWS::EC2::SecurityGroup::Id
+
+  pDeadlineLicenseServerPrivateIp:
+    Description: Private IP of License server
+    Type: String
+
   pDeadlineRepositorySambaPassword:
     Description: Password for Samba
     Type: String
@@ -84,13 +92,21 @@ Resources:
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref rDeadlineWorkstationSecurityGroup
 
-  rDeadlineWorkstationToDeadlineWorkstationIngress:
+  rDeadlineWorkstationToLicenseServerIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref rDeadlineWorkstationSecurityGroup
+      GroupId: !Ref pLicenseServerSecurityGroup
       Description: vfx-deadline-workstation-sg
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref rDeadlineWorkstationSecurityGroup
+
+#  rDeadlineWorkstationToDeadlineWorkstationIngress:
+#    Type: AWS::EC2::SecurityGroupIngress
+#    Properties:
+#      GroupId: !Ref rDeadlineWorkstationSecurityGroup
+#      Description: vfx-deadline-workstation-sg
+#      IpProtocol: '-1'
+#      SourceSecurityGroupId: !Ref rDeadlineWorkstationSecurityGroup
 
   rDeadlineWorkstationInstanceRole:
     Type: AWS::IAM::Role
@@ -108,7 +124,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
         - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   rDeadlineWorkstationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -383,14 +399,16 @@ Resources:
             12_mkdir_Thinkbox:
               command: mkdir -p /data/Thinkbox
             13_install:
-              command: ls /data/install | grep DeadlineClient |
-                (read repo; /data/install/$repo
-                --mode unattended
-                --prefix "/data/Thinkbox/Deadline10"
-                --connectiontype Repository
-                --repositorydir "/data/DeadlineRepository"
-                --licensemode LicenseFree
-                --launcherstartup true
+              command: !Sub |
+                ls /data/install | grep DeadlineClient | \
+                (read repo; /data/install/$repo \
+                --mode unattended \
+                --prefix "/data/Thinkbox/Deadline10" \
+                --connectiontype Repository \
+                --repositorydir "/data/DeadlineRepository" \
+                --licensemode Standard \
+                --licenseserver @${pDeadlineLicenseServerPrivateIp} \
+                --launcherstartup true \
                 --slavestartup false)
             14_xrdp_conf:
               command: |

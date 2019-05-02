@@ -1,0 +1,237 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Provides configuration for a VFX License Server Instance.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Region Configuration
+        Parameters:
+          - pAvailabilityZones
+
+      - Label:
+          default: Network (existing Management VPC config)
+        Parameters:
+          - pManagementVPC
+          - pMgmtAppPrivateSubnetA
+
+      - Label:
+          default: License Server Configuration
+        Parameters:
+          - pLicenseServerInstanceType
+          - pLicenseServerAmi
+          - pLicenseServerMinCapacity
+          - pLicenseServerDesiredCapacity
+          - pLicenseServerMaxCapacity
+
+Parameters:
+  pAvailabilityZones:
+    Description: The list of Availability Zones to use for the subnets in the VPC.
+      This template uses two Availability Zones from your list and preserves the logical order you specify.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+
+  pManagementVPC:
+    Description: Management VPC
+    Type: AWS::EC2::VPC::Id
+
+  pMgmtAppPrivateSubnetA:
+    Description: License Server Subnet A
+    Type: AWS::EC2::Subnet::Id
+
+  pLicenseServerInstanceType:
+    Description: Instance type for the license server
+    Type: String
+
+  pLicenseServerAmi:
+    Description: Which License Server AMI do you want to use?
+    Type: AWS::EC2::Image::Id
+
+  pLicenseServerMinCapacity:
+    Description: The minimum number of instances that can run in your auto scale group
+    Type: String
+
+  pLicenseServerDesiredCapacity:
+    Description: The desired capacity must be less than or equal to the maximum capacity
+    Type: String
+
+  pLicenseServerMaxCapacity:
+    Description: The maximum number of instances that you can run in your auto scale group
+    Type: String
+
+  pDeadlineArtifacts:
+    Description: S3 bucket name with Deadline Artifacts
+    Type: String
+
+  pEnvironment:
+    AllowedValues:
+      - DEV
+      - TEST
+      - PROD
+    Default: DEV
+    Description: Environment (Dev, Test or Prod)
+    Type: String
+
+Resources:
+  rLicenseServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for License server Instances
+      VpcId: !Ref pManagementVPC
+      Tags:
+        - Key: Name
+          Value: vfx-deadline-license-server-sg
+        - Key: Environment
+          Value: !Ref pEnvironment
+
+  rLicenseServerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: AttachENi
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:AttachNetworkInterface
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  rLicenseServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref rLicenseServerInstanceRole
+
+  rLicenseServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 90
+
+  rLicenseServerSecondaryEni:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      GroupSet:
+        - !Ref rLicenseServerSecurityGroup
+      SubnetId: !Ref pMgmtAppPrivateSubnetA
+      Tags:
+        - Key: Name
+          Value: vfx-deadline-license-server-secondary-eni
+        - Key: Environment
+          Value: !Ref pEnvironment
+
+  rDeadlineLicenseServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              jq: []
+              awslogs: []
+          files:
+            /etc/awslogs/awslogs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/lib/awslogs/agent-state
+
+                [/var/log/messages]
+                file = /var/log/messages
+                log_group_name = ${rLicenseServerLogGroup}
+                log_stream_name = %INSTANCE_ID/var/log/messages
+                datetime_format = %b %d %H:%M:%S
+                initial_position = start_of_file
+            /tmp/awslog_init.sh:
+              content: !Sub |
+                #!/bin/bash -xe
+                INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
+                sed -i "s|%INSTANCE_ID|$INSTANCE_ID|g" /etc/awslogs/awslogs.conf
+                sed -i -e "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
+                systemctl enable awslogsd.service
+                systemctl start awslogsd.service
+              mode: '0755'
+          commands:
+            01_check_data:
+              command: |
+                while [ ! -e /dev/xvdh ]; do
+                  udevadm trigger -y '*nvme*'
+                  sleep 5
+                done
+            02_format_disk:
+              command: mkfs -t ext4 /dev/xvdh
+            03_mkdir_data:
+              command: mkdir -p /data
+            04_mount:
+              command: mount /dev/xvdh /data
+            05_fstab:
+              command: echo "/dev/xvdh /data ext4 defaults,nofail 0 2" >> /etc/fstab
+#            06_mkdir_downloads:
+#              command: mkdir -p /data/downloads
+#            07_copy_deadline_files_from_s3:
+#              command: !Sub aws s3 cp s3://${pDeadlineArtifacts} /data/downloads --recursive
+#            08_mkdir_install:
+#              command: mkdir -p /data/install
+#            09_untar:
+#              command: ls /data/downloads | grep ThinkboxLicenseServer.*linux.* | (read repo; tar -C /data/install -xvf /data/downloads/$repo)
+            10_attach_eni:
+              command: !Sub |
+                #!/bin/bash -x
+                EC2_INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
+                aws ec2 attach-network-interface --network-interface-id ${rLicenseServerSecondaryEni} --instance-id $EC2_INSTANCE_ID --device-index 1 --region ${AWS::Region}
+            11_awslogs:
+              command: /tmp/awslog_init.sh
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvdh
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp2
+            Encrypted: true
+      IamInstanceProfile: !Ref rLicenseServerInstanceProfile
+      ImageId: !Ref pLicenseServerAmi
+      InstanceType: !Ref pLicenseServerInstanceType
+      SecurityGroupIds:
+        - !Ref rLicenseServerSecurityGroup
+      SubnetId: !Ref pMgmtAppPrivateSubnetA
+      Tags:
+        - Key: Name
+          Value: vfx-deadline-license-server
+        - Key: Environment
+          Value: !Ref pEnvironment
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -x
+          yum update --security -y
+          yum update aws-cfn-bootstrap -y
+
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineLicenseServer --region ${AWS::Region}
+          # Signal the status from cfn-init
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource rDeadlineLicenseServer --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: 'PT15M'
+
+Outputs:
+  rLicenseServerSecurityGroup:
+    Value: !Ref rLicenseServerSecurityGroup
+
+  rDeadlineLicenseServer:
+    Value: !GetAtt rDeadlineLicenseServer.PrivateIp
+
+  rLicenseServerInstanceRole:
+    Value: !Ref rLicenseServerInstanceRole

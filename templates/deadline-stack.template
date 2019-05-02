@@ -26,14 +26,19 @@ Metadata:
           - pMgmtAppPrivateSubnetBCIDR
 
       - Label:
-          default: Deadline render node configuration
+          default: Deadline license server configuration
         Parameters:
-          - pDeadlineRenderNodeTargetCapacity
+          - pLicenseServerInstanceType
 
       - Label:
           default: Deadline repository configuration
         Parameters:
           - pDeadlineRepoInstanceType
+
+      - Label:
+          default: Deadline render node configuration
+        Parameters:
+          - pDeadlineRenderNodeTargetCapacity
 
       - Label:
           default: Deadline workstation configuration
@@ -165,6 +170,11 @@ Parameters:
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.10.112.0/21
     Description: The CIDR block for the private subnet located in Availability Zone 2 of the management VPC.
+    Type: String
+
+  pLicenseServerInstanceType:
+    Default: m5.large
+    Description: Instance type for the license server
     Type: String
 
   pDeadlineRenderNodeTargetCapacity:
@@ -404,6 +414,27 @@ Resources:
         pProdAppPrivateSubnetA: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetA
         pProdAppPrivateSubnetB: !GetAtt ProductionVpcTemplate.Outputs.rProdAppPrivateSubnetB
 
+  LicenseServerTemplate:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}deadline_license_server/license_server.template
+      TimeoutInMinutes: 30
+      Parameters:
+        pAvailabilityZones:
+          Fn::Join:
+            - ','
+            - !Ref pAvailabilityZones
+        pManagementVPC: !GetAtt ManagementVpcTemplate.Outputs.rVPCManagement
+        pMgmtAppPrivateSubnetA: !GetAtt ManagementVpcTemplate.Outputs.rMgmtAppPrivateSubnetA
+        pLicenseServerInstanceType: !Ref pLicenseServerInstanceType
+        pLicenseServerAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
+        pLicenseServerMinCapacity: '1'
+        pLicenseServerDesiredCapacity: '1'
+        pLicenseServerMaxCapacity: '1'
+        pDeadlineArtifacts: !Ref QSS3BucketName
+        pEnvironment: !Ref pEnvironment
+
   DeadlineRepoTemplate:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -440,6 +471,8 @@ Resources:
         pDeadlineRenderNodeAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', AMZNLINUX2AMI]
         pDeadlineRenderNodeTargetCapacity: !Ref pDeadlineRenderNodeTargetCapacity
         pDeadlineArtifacts: !Ref QSS3BucketName
+        pLicenseServerSecurityGroup: !GetAtt LicenseServerTemplate.Outputs.rLicenseServerSecurityGroup
+        pDeadlineLicenseServerPrivateIp: !GetAtt LicenseServerTemplate.Outputs.rDeadlineLicenseServer
         pDeadlineRepoSecurityGroup: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoSecurityGroup
         pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
@@ -458,6 +491,8 @@ Resources:
         pDeadlineWorkstationInstanceType: !Ref pDeadlineWorkstationInstanceType
         pDeadlineWorkstationAmi: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', CENTOS7AMI]
         pDeadlineArtifacts: !Ref QSS3BucketName
+        pLicenseServerSecurityGroup: !GetAtt LicenseServerTemplate.Outputs.rLicenseServerSecurityGroup
+        pDeadlineLicenseServerPrivateIp: !GetAtt LicenseServerTemplate.Outputs.rDeadlineLicenseServer
         pDeadlineRepoSecurityGroup: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoSecurityGroup
         pDeadlineRepositoryPrivateIp: !GetAtt DeadlineRepoTemplate.Outputs.rDeadlineRepoEC2Instance
         pDeadlineRepositorySambaPassword: !Ref pDeadlineRepositorySambaPassword
