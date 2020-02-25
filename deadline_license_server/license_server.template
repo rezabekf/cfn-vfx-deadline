@@ -192,7 +192,7 @@ Resources:
                 #!/bin/bash -x
                 EC2_INSTANCE_ID=$(curl -s http://instance-data/latest/meta-data/instance-id)
                 aws ec2 attach-network-interface --network-interface-id ${rLicenseServerSecondaryEni} --instance-id $EC2_INSTANCE_ID --device-index 1 --region ${AWS::Region}
-            11_awslogs:
+            07_awslogs:
               command: /tmp/awslog_init.sh
     Properties:
       BlockDeviceMappings:
