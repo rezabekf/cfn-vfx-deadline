@@ -279,8 +279,6 @@ Mappings:
       EFS: 'true'
 
   AWSAMIRegionMap:
-    AMI:
-      AMZNLINUX2AMI: amzn2-ami-hvm-2.0.20190228-x86_64-gp2
     eu-north-1:
       AMZNLINUX2AMI: ami-244ac35a
       CENTOS7AMI: ami-5ee66f20

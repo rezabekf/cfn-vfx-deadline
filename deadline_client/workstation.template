@@ -100,14 +100,6 @@ Resources:
       IpProtocol: '-1'
       SourceSecurityGroupId: !Ref rDeadlineWorkstationSecurityGroup
 
-#  rDeadlineWorkstationToDeadlineWorkstationIngress:
-#    Type: AWS::EC2::SecurityGroupIngress
-#    Properties:
-#      GroupId: !Ref rDeadlineWorkstationSecurityGroup
-#      Description: vfx-deadline-workstation-sg
-#      IpProtocol: '-1'
-#      SourceSecurityGroupId: !Ref rDeadlineWorkstationSecurityGroup
-
   rDeadlineWorkstationInstanceRole:
     Type: AWS::IAM::Role
     Properties:

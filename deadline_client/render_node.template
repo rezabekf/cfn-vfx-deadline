@@ -338,7 +338,7 @@ Resources:
             11_mount_DeadlineRepository:
               command: !Sub |
                 # create fstab entry for Deadline repository
-                echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=Deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
+                echo "//${pDeadlineRepositoryPrivateIp}/DeadlineRepository /data/DeadlineRepository cifs username=deadlineuser,password=${pDeadlineRepositorySambaPassword} 0 0" >> /etc/fstab
 
                 # mount the Deadline repository
                 mount -a
@@ -402,6 +402,7 @@ Resources:
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource rDeadlineRenderNodeLaunchTemplateEfs --region ${AWS::Region}
 
   rDeadlineRenderNodeSpotFleet:
+    Condition: SupportsEfs
     Type: AWS::EC2::SpotFleet
     Properties:
       SpotFleetRequestConfigData:
@@ -431,7 +432,10 @@ Outputs:
     Value: !If
       - SupportsEfs
       - !Ref rDeadlineRenderNodeLaunchTemplateEfs
-      - !Ref rDeadlineRenderNodeLaunchTemplateEfs
+      - None
 
   rDeadlineRenderNodeSpotFleet:
-    Value: !Ref rDeadlineRenderNodeSpotFleet
+    Value: !If
+      - SupportsEfs
+      - !Ref rDeadlineRenderNodeSpotFleet
+      - None
